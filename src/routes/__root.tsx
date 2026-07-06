@@ -131,9 +131,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="pt-BR">
       <head>
         <HeadContent />
+        <ThemeInitScript />
       </head>
       <body>
         {children}
@@ -143,6 +144,12 @@ function RootShell({ children }: { children: ReactNode }) {
   );
 }
 
+function ThemeInitScript() {
+  // Applies the saved theme before paint to avoid a flash.
+  const code = `try{var t=localStorage.getItem('memorize-theme');if(t==='dark'||(!t&&window.matchMedia('(prefers-color-scheme: dark)').matches)){document.documentElement.classList.add('dark')}}catch(e){}`;
+  return <script dangerouslySetInnerHTML={{ __html: code }} />;
+}
+
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
@@ -150,6 +157,7 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <Outlet />
+      <Toaster position="top-center" richColors />
     </QueryClientProvider>
   );
 }
