@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { motion } from "framer-motion";
 import type { MemoryItem } from "@/types";
 import { otherWordsFrom, pickBlankIndex, shuffle, tokenize } from "./gameUtils";
 import { QuestionCard } from "@/components/QuestionCard";
@@ -25,16 +26,37 @@ export function FillBlankGame({ item, step, total, bank, onAnswer }: FillBlankGa
   const confirm = (opt: string) => {
     if (picked) return;
     setPicked(opt);
-    setTimeout(() => onAnswer(opt.toLowerCase() === answer.toLowerCase()), 700);
+    setTimeout(() => onAnswer(opt.toLowerCase() === answer.toLowerCase()), 750);
   };
+
+  const isRight = picked && picked.toLowerCase() === answer.toLowerCase();
 
   return (
     <QuestionCard item={item} prompt="Complete a palavra que falta" step={step} total={total}>
-      <p className="rounded-2xl bg-muted/60 p-4 text-lg leading-relaxed">
+      <motion.p
+        animate={
+          picked
+            ? isRight
+              ? { scale: [1, 1.02, 1] }
+              : { x: [0, -8, 8, -6, 6, 0] }
+            : {}
+        }
+        transition={{ duration: 0.45 }}
+        className="rounded-2xl bg-muted/60 p-4 text-lg leading-relaxed"
+      >
         {tokens.map((t, i) => (
           <span key={i}>
             {i === blankIndex ? (
-              <span className="mx-1 inline-block min-w-24 rounded-lg border-2 border-dashed border-primary px-2 text-primary">
+              <span
+                className={
+                  "mx-1 inline-block min-w-24 rounded-lg border-2 border-dashed px-2 " +
+                  (picked
+                    ? isRight
+                      ? "border-success bg-success/15 text-success"
+                      : "border-destructive bg-destructive/15 text-destructive"
+                    : "border-primary text-primary")
+                }
+              >
                 {picked ?? "____"}
               </span>
             ) : (
@@ -42,30 +64,36 @@ export function FillBlankGame({ item, step, total, bank, onAnswer }: FillBlankGa
             )}{" "}
           </span>
         ))}
-      </p>
+      </motion.p>
       <div className="mt-5 grid grid-cols-2 gap-3">
-        {options.map((opt) => {
+        {options.map((opt, idx) => {
           const state =
             picked == null
               ? ""
               : opt === picked && opt.toLowerCase() === answer.toLowerCase()
-                ? "border-success bg-success/15 text-success-foreground"
+                ? "border-success bg-success/15"
                 : opt === picked
                   ? "border-destructive bg-destructive/15"
                   : opt.toLowerCase() === answer.toLowerCase()
                     ? "border-success bg-success/10"
                     : "opacity-60";
           return (
-            <Button
+            <motion.div
               key={opt}
-              variant="outline"
-              size="lg"
-              onClick={() => confirm(opt)}
-              disabled={!!picked}
-              className={"press h-14 rounded-2xl border-2 text-base font-bold " + state}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.05 * idx, duration: 0.3 }}
             >
-              {opt}
-            </Button>
+              <Button
+                variant="outline"
+                size="lg"
+                onClick={() => confirm(opt)}
+                disabled={!!picked}
+                className={"press h-14 w-full rounded-2xl border-2 text-base font-bold " + state}
+              >
+                {opt}
+              </Button>
+            </motion.div>
           );
         })}
       </div>
