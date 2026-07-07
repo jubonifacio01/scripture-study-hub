@@ -11,3 +11,16 @@ export const demoUser: UserProfile = {
   accuracy: 87,
   reviewToday: 5,
 };
+
+export const dailyGoal = {
+  target: 20,
+  completed: 12,
+  unit: "min",
+};
+
+export const continueStudying = {
+  collectionId: "essenciais",
+  itemId: "jo-3-16",
+  reference: "João 3:16",
+  progress: 60,
+};
