@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { motion } from "framer-motion";
 import type { MemoryItem } from "@/types";
 import { shuffle } from "./gameUtils";
 import { QuestionCard } from "@/components/QuestionCard";
@@ -31,7 +32,7 @@ export function MultipleChoiceGame({
   const confirm = (id: string) => {
     if (picked) return;
     setPicked(id);
-    setTimeout(() => onAnswer(id === item.id), 700);
+    setTimeout(() => onAnswer(id === item.id), 750);
   };
 
   return (
@@ -40,7 +41,7 @@ export function MultipleChoiceGame({
         “{item.text}”
       </p>
       <div className="mt-5 flex flex-col gap-3">
-        {options.map((opt) => {
+        {options.map((opt, idx) => {
           const state =
             picked == null
               ? ""
@@ -51,16 +52,25 @@ export function MultipleChoiceGame({
                   : opt.id === item.id
                     ? "border-success bg-success/10"
                     : "opacity-60";
+          const shake = picked === opt.id && opt.id !== item.id;
           return (
-            <Button
+            <motion.div
               key={opt.id}
-              variant="outline"
-              onClick={() => confirm(opt.id)}
-              disabled={!!picked}
-              className={"press h-14 justify-start rounded-2xl border-2 text-base font-bold " + state}
+              initial={{ opacity: 0, x: -12 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.05 * idx, duration: 0.3 }}
             >
-              {opt.label}
-            </Button>
+              <motion.div animate={shake ? { x: [0, -8, 8, -6, 6, 0] } : {}} transition={{ duration: 0.4 }}>
+                <Button
+                  variant="outline"
+                  onClick={() => confirm(opt.id)}
+                  disabled={!!picked}
+                  className={"press h-14 w-full justify-start rounded-2xl border-2 text-base font-bold " + state}
+                >
+                  {opt.label}
+                </Button>
+              </motion.div>
+            </motion.div>
           );
         })}
       </div>

@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { AppLayout } from "@/components/AppLayout";
 import { Header } from "@/components/Header";
 import { GameCard } from "@/components/GameCard";
@@ -7,6 +8,8 @@ import { FillBlankGame } from "@/games/FillBlankGame";
 import { MultipleChoiceGame } from "@/games/MultipleChoiceGame";
 import { OrderWordsGame } from "@/games/OrderWordsGame";
 import { ScoreCard } from "@/components/ScoreCard";
+import { CountdownOverlay } from "@/components/CountdownOverlay";
+import { Timer } from "@/components/Timer";
 import { Button } from "@/components/ui/button";
 import { collections } from "@/data/collections";
 import { memoryItems, getItemById } from "@/data/memoryItems";
@@ -75,6 +78,8 @@ function PlayPage() {
   const [queue, setQueue] = useState<MemoryItem[]>([]);
   const [step, setStep] = useState(0);
   const [correct, setCorrect] = useState(0);
+  const [combo, setCombo] = useState(0);
+  const [countdown, setCountdown] = useState(false);
 
   const start = (type: GameType) => {
     const col = collections.find((c) => c.id === collectionId)!;
@@ -83,12 +88,15 @@ function PlayPage() {
     setQueue(q);
     setStep(0);
     setCorrect(0);
+    setCombo(0);
     setGameType(type);
-    setPhase("playing");
+    setCountdown(true);
   };
 
   const onAnswer = (isRight: boolean) => {
     const nextCorrect = correct + (isRight ? 1 : 0);
+    const nextCombo = isRight ? combo + 1 : 0;
+    setCombo(nextCombo);
     if (step + 1 >= queue.length) {
       setCorrect(nextCorrect);
       setPhase("done");
@@ -98,10 +106,18 @@ function PlayPage() {
     }
   };
 
-  if (phase === "playing") {
+  if (phase === "playing" || countdown) {
     const item = queue[step];
     return (
       <AppLayout>
+        {countdown ? (
+          <CountdownOverlay
+            onDone={() => {
+              setCountdown(false);
+              setPhase("playing");
+            }}
+          />
+        ) : null}
         <Header
           subtitle={`Rodada ${step + 1} de ${queue.length}`}
           title="Foco total 🔥"
@@ -109,42 +125,77 @@ function PlayPage() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => setPhase("setup")}
+              onClick={() => {
+                setCountdown(false);
+                setPhase("setup");
+              }}
               className="rounded-xl"
             >
               Sair
             </Button>
           }
         />
+
+        <div className="mt-3 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <div className="rounded-full bg-muted px-3 py-1.5 text-xs font-black tabular-nums">
+              <span className="text-muted-foreground">Pontos </span>
+              <span className="text-foreground">{correct * 10}</span>
+            </div>
+            <AnimatePresence>
+              {combo >= 2 && (
+                <motion.div
+                  key={combo}
+                  initial={{ scale: 0.6, opacity: 0, y: 6 }}
+                  animate={{ scale: 1, opacity: 1, y: 0 }}
+                  exit={{ scale: 0.6, opacity: 0 }}
+                  transition={{ type: "spring", stiffness: 400, damping: 20 }}
+                  className="rounded-full gradient-fun px-3 py-1.5 text-xs font-black text-primary-foreground shadow-soft"
+                >
+                  🔥 {combo}x combo
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+          {phase === "playing" ? <Timer seconds={30} running /> : null}
+        </div>
+
         <div className="mt-4">
-          {gameType === "fill-blank" ? (
-            <FillBlankGame
-              item={item}
-              step={step + 1}
-              total={queue.length}
-              bank={memoryItems}
-              onAnswer={onAnswer}
-            />
-          ) : gameType === "multiple-choice" ? (
-            <MultipleChoiceGame
-              item={item}
-              step={step + 1}
-              total={queue.length}
-              bank={memoryItems}
-              onAnswer={onAnswer}
-            />
-          ) : (
-            <OrderWordsGame
-              item={item}
-              step={step + 1}
-              total={queue.length}
-              onAnswer={onAnswer}
-            />
-          )}
+          <AnimatePresence mode="wait">
+            {phase === "playing" && item ? (
+              <div key={item.id + step}>
+                {gameType === "fill-blank" ? (
+                  <FillBlankGame
+                    item={item}
+                    step={step + 1}
+                    total={queue.length}
+                    bank={memoryItems}
+                    onAnswer={onAnswer}
+                  />
+                ) : gameType === "multiple-choice" ? (
+                  <MultipleChoiceGame
+                    item={item}
+                    step={step + 1}
+                    total={queue.length}
+                    bank={memoryItems}
+                    onAnswer={onAnswer}
+                  />
+                ) : (
+                  <OrderWordsGame
+                    item={item}
+                    step={step + 1}
+                    total={queue.length}
+                    onAnswer={onAnswer}
+                  />
+                )}
+              </div>
+            ) : null}
+          </AnimatePresence>
         </div>
       </AppLayout>
     );
   }
+
 
   if (phase === "done") {
     return (
