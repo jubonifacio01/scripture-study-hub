@@ -15,33 +15,33 @@ export function QuestionCard({ item, prompt, children, step, total }: QuestionCa
   return (
     <motion.div
       key={item.id + step}
-      initial={{ opacity: 0, y: 18, scale: 0.98 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: -18, scale: 0.98 }}
-      transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -4 }}
+      transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
       className="card-elevated overflow-hidden"
     >
-      <div className="h-1.5 bg-muted">
+      <div className="h-0.5 bg-muted">
         <motion.div
-          className="h-full gradient-primary"
+          className="h-full bg-primary"
           initial={{ width: 0 }}
           animate={{ width: `${pct}%` }}
-          transition={{ duration: 0.6, ease: "easeOut" }}
+          transition={{ duration: 0.5, ease: "easeOut" }}
         />
       </div>
-      <div className="p-5">
-        <div className="flex items-center justify-between text-xs font-bold uppercase tracking-widest">
+      <div className="p-6">
+        <div className="flex items-center justify-between text-[11px] font-medium uppercase tracking-[0.14em]">
           <span className="text-primary">
             {item.book} {item.chapter}:{item.verse}
           </span>
-          <span className="rounded-full bg-muted px-2 py-0.5 text-muted-foreground tabular-nums">
+          <span className="tabular-nums text-muted-foreground">
             {step} / {total}
           </span>
         </div>
-        <h2 className="mt-2 font-display text-xl font-extrabold leading-tight">
+        <h2 className="mt-3 text-[20px] font-semibold leading-snug tracking-tight">
           {prompt}
         </h2>
-        <div className="mt-5">{children}</div>
+        <div className="mt-6">{children}</div>
       </div>
     </motion.div>
   );

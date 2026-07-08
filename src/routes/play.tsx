@@ -49,24 +49,25 @@ const GAME_TYPES: {
     id: "fill-blank",
     title: "Complete a palavra",
     description: "Preencha o espaço em branco",
-    icon: <TextCursorInput className="h-6 w-6" />,
+    icon: <TextCursorInput className="h-[18px] w-[18px]" strokeWidth={1.75} />,
     color: "primary",
   },
   {
     id: "multiple-choice",
     title: "Escolha múltipla",
     description: "Identifique a referência correta",
-    icon: <ListChecks className="h-6 w-6" />,
+    icon: <ListChecks className="h-[18px] w-[18px]" strokeWidth={1.75} />,
     color: "accent",
   },
   {
     id: "order-words",
     title: "Ordene as palavras",
     description: "Monte o versículo na ordem certa",
-    icon: <Blocks className="h-6 w-6" />,
+    icon: <Blocks className="h-[18px] w-[18px]" strokeWidth={1.75} />,
     color: "fun",
   },
 ];
+
 
 function PlayPage() {
   const navigate = useNavigate();
@@ -120,7 +121,7 @@ function PlayPage() {
         ) : null}
         <Header
           subtitle={`Rodada ${step + 1} de ${queue.length}`}
-          title="Foco total 🔥"
+          title="Sessão em foco"
           right={
             <Button
               variant="ghost"
@@ -129,36 +130,37 @@ function PlayPage() {
                 setCountdown(false);
                 setPhase("setup");
               }}
-              className="rounded-xl"
+              className="rounded-full text-muted-foreground hover:text-foreground"
             >
               Sair
             </Button>
           }
         />
 
-        <div className="mt-3 flex items-center justify-between gap-3">
+        <div className="mt-4 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <div className="rounded-full bg-muted px-3 py-1.5 text-xs font-black tabular-nums">
+            <div className="rounded-full border border-border bg-card px-2.5 py-1 text-xs tabular-nums">
               <span className="text-muted-foreground">Pontos </span>
-              <span className="text-foreground">{correct * 10}</span>
+              <span className="font-medium text-foreground">{correct * 10}</span>
             </div>
             <AnimatePresence>
               {combo >= 2 && (
                 <motion.div
                   key={combo}
-                  initial={{ scale: 0.6, opacity: 0, y: 6 }}
-                  animate={{ scale: 1, opacity: 1, y: 0 }}
-                  exit={{ scale: 0.6, opacity: 0 }}
-                  transition={{ type: "spring", stiffness: 400, damping: 20 }}
-                  className="rounded-full gradient-fun px-3 py-1.5 text-xs font-black text-primary-foreground shadow-soft"
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary"
                 >
-                  🔥 {combo}x combo
+                  {combo}× seguidas
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
           {phase === "playing" ? <Timer seconds={30} running /> : null}
         </div>
+
 
         <div className="mt-4">
           <AnimatePresence mode="wait">
@@ -200,8 +202,8 @@ function PlayPage() {
   if (phase === "done") {
     return (
       <AppLayout>
-        <Header subtitle="Resultado" title="Bom trabalho!" />
-        <div className="mt-5">
+        <Header subtitle="Resultado" title="Bem feito." />
+        <div className="mt-6">
           <ScoreCard
             result={{ correct, total: queue.length, xpEarned: correct * 10 }}
             onPlayAgain={() => start(gameType)}
@@ -212,9 +214,10 @@ function PlayPage() {
     );
   }
 
+
   return (
     <AppLayout>
-      <Header subtitle="Nova partida" title="Jogar Agora" />
+      <Header subtitle="Nova sessão" title="Praticar" />
 
       <Section title="Coleção">
         <div className="flex flex-col gap-2">
@@ -225,17 +228,17 @@ function PlayPage() {
                 key={c.id}
                 onClick={() => setCollectionId(c.id)}
                 className={
-                  "press flex items-center gap-3 rounded-2xl border-2 p-3 text-left transition " +
+                  "press flex items-center gap-3 rounded-xl border p-3 text-left transition-colors " +
                   (active
                     ? "border-primary bg-primary/5"
-                    : "border-border bg-card")
+                    : "border-border bg-card hover:border-foreground/20")
                 }
               >
-                <span className="grid h-11 w-11 place-items-center rounded-2xl gradient-primary text-xl text-primary-foreground">
+                <span className="grid h-10 w-10 place-items-center rounded-lg bg-muted text-lg">
                   {c.emoji}
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate font-display font-extrabold">
+                  <span className="block truncate text-[14px] font-medium tracking-tight">
                     {c.name}
                   </span>
                   <span className="block truncate text-xs text-muted-foreground">
@@ -257,11 +260,13 @@ function PlayPage() {
                 key={d.id}
                 onClick={() => setDifficulty(d.id)}
                 className={
-                  "press rounded-2xl border-2 p-3 text-center transition " +
-                  (active ? "border-primary bg-primary/5" : "border-border")
+                  "press rounded-xl border p-3 text-center transition-colors " +
+                  (active
+                    ? "border-primary bg-primary/5"
+                    : "border-border bg-card hover:border-foreground/20")
                 }
               >
-                <p className="font-display text-sm font-black">{d.label}</p>
+                <p className="text-[13px] font-medium tracking-tight">{d.label}</p>
                 <p className="mt-1 text-[10px] text-muted-foreground">{d.hint}</p>
               </button>
             );
@@ -278,8 +283,10 @@ function PlayPage() {
                 key={n}
                 onClick={() => setCount(n)}
                 className={
-                  "press rounded-2xl border-2 py-3 text-center font-display font-black transition " +
-                  (active ? "border-primary bg-primary/5 text-primary" : "border-border")
+                  "press rounded-xl border py-3 text-center text-[15px] font-medium tabular-nums tracking-tight transition-colors " +
+                  (active
+                    ? "border-primary bg-primary/5 text-primary"
+                    : "border-border bg-card hover:border-foreground/20")
                 }
               >
                 {n}
@@ -290,7 +297,7 @@ function PlayPage() {
       </Section>
 
       <Section title="Escolha um desafio">
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-2">
           {GAME_TYPES.map((g) => (
             <GameCard
               key={g.id}
@@ -309,11 +316,12 @@ function PlayPage() {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="mt-6">
-      <h2 className="mb-3 font-display text-sm font-black uppercase tracking-widest text-muted-foreground">
+    <section className="mt-8">
+      <h2 className="mb-3 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
         {title}
       </h2>
       {children}
     </section>
   );
 }
+

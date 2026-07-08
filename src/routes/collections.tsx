@@ -64,8 +64,9 @@ function CollectionsPage() {
         right={
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-              <Button size="icon" className="rounded-2xl gradient-primary text-primary-foreground">
-                <Plus className="h-5 w-5" />
+              <Button size="icon" className="rounded-full bg-foreground text-background hover:bg-foreground/90">
+                <Plus className="h-4 w-4" strokeWidth={2} />
+
               </Button>
             </DialogTrigger>
             <DialogContent className="rounded-3xl">
@@ -106,10 +107,11 @@ function CollectionsPage() {
               <DialogFooter>
                 <Button
                   onClick={create}
-                  className="w-full rounded-2xl gradient-primary text-primary-foreground"
+                  className="h-11 w-full rounded-xl bg-primary text-primary-foreground hover:bg-primary/90"
                 >
                   Criar coleção
                 </Button>
+
               </DialogFooter>
             </DialogContent>
           </Dialog>

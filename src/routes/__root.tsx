@@ -82,23 +82,23 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         content:
           "width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1",
       },
-      { name: "theme-color", content: "#7c3aed" },
-      { title: "Memorize+ — Memorize a Bíblia jogando" },
+      { name: "theme-color", content: "#F8F8F6" },
+      { title: "Memorize+ — Uma plataforma serena para memorizar a Bíblia" },
       {
         name: "description",
         content:
-          "Memorize versículos bíblicos com jogos rápidos, coleções e progresso gamificado. Rápido, moderno e viciante.",
+          "Memorize+ é um espaço calmo e elegante para memorizar textos bíblicos com prática espaçada e microdesafios diários.",
       },
-      { property: "og:title", content: "Memorize+ — Memorize a Bíblia jogando" },
+      { property: "og:title", content: "Memorize+ — Memorize a Bíblia com clareza" },
       {
         property: "og:description",
         content:
-          "Jogos curtos e gamificação para memorizar textos bíblicos. Instale como app e comece hoje.",
+          "Uma plataforma moderna e minimalista para memorizar versículos com foco, elegância e constância.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "apple-mobile-web-app-capable", content: "yes" },
-      { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
+      { name: "apple-mobile-web-app-status-bar-style", content: "default" },
       { name: "apple-mobile-web-app-title", content: "Memorize+" },
     ],
     links: [
@@ -117,7 +117,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       },
       {
         rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Poppins:wght@600;700;800;900&display=swap",
+        href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap",
       },
       { rel: "icon", href: "/icon-192.png", type: "image/png" },
       { rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
