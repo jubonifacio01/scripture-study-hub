@@ -120,7 +120,7 @@ function PlayPage() {
         ) : null}
         <Header
           subtitle={`Rodada ${step + 1} de ${queue.length}`}
-          title="Foco total 🔥"
+          title="Sessão em foco"
           right={
             <Button
               variant="ghost"
@@ -129,36 +129,37 @@ function PlayPage() {
                 setCountdown(false);
                 setPhase("setup");
               }}
-              className="rounded-xl"
+              className="rounded-full text-muted-foreground hover:text-foreground"
             >
               Sair
             </Button>
           }
         />
 
-        <div className="mt-3 flex items-center justify-between gap-3">
+        <div className="mt-4 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <div className="rounded-full bg-muted px-3 py-1.5 text-xs font-black tabular-nums">
+            <div className="rounded-full border border-border bg-card px-2.5 py-1 text-xs tabular-nums">
               <span className="text-muted-foreground">Pontos </span>
-              <span className="text-foreground">{correct * 10}</span>
+              <span className="font-medium text-foreground">{correct * 10}</span>
             </div>
             <AnimatePresence>
               {combo >= 2 && (
                 <motion.div
                   key={combo}
-                  initial={{ scale: 0.6, opacity: 0, y: 6 }}
-                  animate={{ scale: 1, opacity: 1, y: 0 }}
-                  exit={{ scale: 0.6, opacity: 0 }}
-                  transition={{ type: "spring", stiffness: 400, damping: 20 }}
-                  className="rounded-full gradient-fun px-3 py-1.5 text-xs font-black text-primary-foreground shadow-soft"
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary"
                 >
-                  🔥 {combo}x combo
+                  {combo}× seguidas
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
           {phase === "playing" ? <Timer seconds={30} running /> : null}
         </div>
+
 
         <div className="mt-4">
           <AnimatePresence mode="wait">
