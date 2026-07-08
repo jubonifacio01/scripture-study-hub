@@ -216,7 +216,7 @@ function PlayPage() {
 
   return (
     <AppLayout>
-      <Header subtitle="Nova partida" title="Jogar Agora" />
+      <Header subtitle="Nova sessão" title="Praticar" />
 
       <Section title="Coleção">
         <div className="flex flex-col gap-2">
@@ -227,17 +227,17 @@ function PlayPage() {
                 key={c.id}
                 onClick={() => setCollectionId(c.id)}
                 className={
-                  "press flex items-center gap-3 rounded-2xl border-2 p-3 text-left transition " +
+                  "press flex items-center gap-3 rounded-xl border p-3 text-left transition-colors " +
                   (active
                     ? "border-primary bg-primary/5"
-                    : "border-border bg-card")
+                    : "border-border bg-card hover:border-foreground/20")
                 }
               >
-                <span className="grid h-11 w-11 place-items-center rounded-2xl gradient-primary text-xl text-primary-foreground">
+                <span className="grid h-10 w-10 place-items-center rounded-lg bg-muted text-lg">
                   {c.emoji}
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate font-display font-extrabold">
+                  <span className="block truncate text-[14px] font-medium tracking-tight">
                     {c.name}
                   </span>
                   <span className="block truncate text-xs text-muted-foreground">
@@ -259,11 +259,13 @@ function PlayPage() {
                 key={d.id}
                 onClick={() => setDifficulty(d.id)}
                 className={
-                  "press rounded-2xl border-2 p-3 text-center transition " +
-                  (active ? "border-primary bg-primary/5" : "border-border")
+                  "press rounded-xl border p-3 text-center transition-colors " +
+                  (active
+                    ? "border-primary bg-primary/5"
+                    : "border-border bg-card hover:border-foreground/20")
                 }
               >
-                <p className="font-display text-sm font-black">{d.label}</p>
+                <p className="text-[13px] font-medium tracking-tight">{d.label}</p>
                 <p className="mt-1 text-[10px] text-muted-foreground">{d.hint}</p>
               </button>
             );
@@ -280,8 +282,10 @@ function PlayPage() {
                 key={n}
                 onClick={() => setCount(n)}
                 className={
-                  "press rounded-2xl border-2 py-3 text-center font-display font-black transition " +
-                  (active ? "border-primary bg-primary/5 text-primary" : "border-border")
+                  "press rounded-xl border py-3 text-center text-[15px] font-medium tabular-nums tracking-tight transition-colors " +
+                  (active
+                    ? "border-primary bg-primary/5 text-primary"
+                    : "border-border bg-card hover:border-foreground/20")
                 }
               >
                 {n}
@@ -292,7 +296,7 @@ function PlayPage() {
       </Section>
 
       <Section title="Escolha um desafio">
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-2">
           {GAME_TYPES.map((g) => (
             <GameCard
               key={g.id}
@@ -311,11 +315,12 @@ function PlayPage() {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="mt-6">
-      <h2 className="mb-3 font-display text-sm font-black uppercase tracking-widest text-muted-foreground">
+    <section className="mt-8">
+      <h2 className="mb-3 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
         {title}
       </h2>
       {children}
     </section>
   );
 }
+
