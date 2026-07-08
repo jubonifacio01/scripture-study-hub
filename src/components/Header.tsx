@@ -12,27 +12,29 @@ interface HeaderProps {
 export function Header({ title, subtitle, right }: HeaderProps) {
   const { theme, toggle } = useTheme();
   return (
-    <header className="flex items-center justify-between gap-3 pt-2">
+    <header className="flex items-end justify-between gap-3 pt-3">
       <div className="min-w-0">
         {subtitle ? (
-          <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
             {subtitle}
           </p>
         ) : null}
         {title ? (
-          <h1 className="truncate text-2xl font-black text-foreground">{title}</h1>
+          <h1 className="mt-1 truncate text-[26px] font-semibold tracking-tight text-foreground">
+            {title}
+          </h1>
         ) : null}
       </div>
-      <div className="flex shrink-0 items-center gap-2">
+      <div className="flex shrink-0 items-center gap-1">
         {right}
         <Button
           variant="ghost"
           size="icon"
           onClick={toggle}
           aria-label="Alternar tema"
-          className="rounded-2xl"
+          className="rounded-full text-muted-foreground hover:text-foreground"
         >
-          {theme === "dark" ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+          {theme === "dark" ? <Sun className="h-[18px] w-[18px]" strokeWidth={1.75} /> : <Moon className="h-[18px] w-[18px]" strokeWidth={1.75} />}
         </Button>
       </div>
     </header>

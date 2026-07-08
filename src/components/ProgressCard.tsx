@@ -1,5 +1,4 @@
 import { XPBar } from "./XPBar";
-import { Sparkles } from "lucide-react";
 
 interface ProgressCardProps {
   level: number;
@@ -9,26 +8,21 @@ interface ProgressCardProps {
 
 export function ProgressCard({ level, xp, xpToNext }: ProgressCardProps) {
   return (
-    <section className="card-elevated relative overflow-hidden p-5">
-      <div className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full gradient-primary opacity-20 blur-2xl" />
-      <div className="flex items-center justify-between">
+    <section className="card-elevated p-5">
+      <div className="flex items-baseline justify-between">
         <div>
-          <p className="text-xs font-bold uppercase tracking-widest text-primary">
+          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
             Sua jornada
           </p>
-          <h2 className="font-display text-xl font-extrabold">Nível de Memorização</h2>
+          <h2 className="mt-1 text-lg font-semibold tracking-tight">Nível {level}</h2>
         </div>
-        <div className="grid h-12 w-12 place-items-center rounded-2xl gradient-primary text-primary-foreground shadow-soft">
-          <Sparkles className="h-6 w-6" />
-        </div>
+        <p className="text-xs text-muted-foreground">
+          <span className="font-medium text-foreground tabular-nums">{xpToNext - xp}</span> XP restantes
+        </p>
       </div>
       <div className="mt-4">
         <XPBar level={level} xp={xp} xpToNext={xpToNext} />
       </div>
-      <p className="mt-3 text-sm text-muted-foreground">
-        Faltam <span className="font-bold text-foreground">{xpToNext - xp} XP</span> para o
-        próximo nível.
-      </p>
     </section>
   );
 }
