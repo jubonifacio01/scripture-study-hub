@@ -201,8 +201,8 @@ function PlayPage() {
   if (phase === "done") {
     return (
       <AppLayout>
-        <Header subtitle="Resultado" title="Bom trabalho!" />
-        <div className="mt-5">
+        <Header subtitle="Resultado" title="Bem feito." />
+        <div className="mt-6">
           <ScoreCard
             result={{ correct, total: queue.length, xpEarned: correct * 10 }}
             onPlayAgain={() => start(gameType)}
@@ -212,6 +212,7 @@ function PlayPage() {
       </AppLayout>
     );
   }
+
 
   return (
     <AppLayout>
