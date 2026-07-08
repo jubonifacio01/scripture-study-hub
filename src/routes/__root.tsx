@@ -89,17 +89,21 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         content:
           "Memorize+ é um espaço calmo e elegante para memorizar textos bíblicos com prática espaçada e microdesafios diários.",
       },
-      { property: "og:title", content: "Memorize+ — Memorize a Bíblia com clareza" },
+      { property: "og:title", content: "Memorize+ — Uma plataforma serena para memorizar a Bíblia" },
       {
         property: "og:description",
         content:
-          "Uma plataforma moderna e minimalista para memorizar versículos com foco, elegância e constância.",
+          "Memorize+ é um espaço calmo e elegante para memorizar textos bíblicos com prática espaçada e microdesafios diários.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "apple-mobile-web-app-capable", content: "yes" },
       { name: "apple-mobile-web-app-status-bar-style", content: "default" },
       { name: "apple-mobile-web-app-title", content: "Memorize+" },
+      { name: "twitter:title", content: "Memorize+ — Uma plataforma serena para memorizar a Bíblia" },
+      { name: "twitter:description", content: "Memorize+ é um espaço calmo e elegante para memorizar textos bíblicos com prática espaçada e microdesafios diários." },
+      { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/IIyxS5HvfVfnqvl1JCVKNrDi1rM2/social-images/social-1783543269351-memorium-simbolo-transparente.webp" },
+      { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/IIyxS5HvfVfnqvl1JCVKNrDi1rM2/social-images/social-1783543269351-memorium-simbolo-transparente.webp" },
     ],
     links: [
       {
@@ -119,7 +123,6 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         rel: "stylesheet",
         href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap",
       },
-      { rel: "icon", href: "/icon-192.png", type: "image/png" },
       { rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
       { rel: "manifest", href: "/manifest.webmanifest" },
     ],
