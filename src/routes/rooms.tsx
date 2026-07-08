@@ -5,8 +5,10 @@ import { Header } from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PlayerCard } from "@/components/PlayerCard";
+import { AuthGate } from "@/components/AuthGate";
+import { useAuthState } from "@/hooks/useAuthState";
 import { toast } from "sonner";
-import { Users2, Copy } from "lucide-react";
+import { Users as Users2, Copy } from "lucide-react";
 
 export const Route = createFileRoute("/rooms")({
   head: () => ({
@@ -28,9 +30,22 @@ function generateCode() {
 function RoomsPage() {
   const [code, setCode] = useState<string | null>(null);
   const [joinCode, setJoinCode] = useState("");
+  const [authOpen, setAuthOpen] = useState(false);
+  const { state, signIn } = useAuthState();
+  const isGuest = state === "guest";
 
-  const create = () => setCode(generateCode());
+  const create = () => {
+    if (isGuest) {
+      setAuthOpen(true);
+      return;
+    }
+    setCode(generateCode());
+  };
   const join = () => {
+    if (isGuest) {
+      setAuthOpen(true);
+      return;
+    }
     if (joinCode.trim().length < 4) {
       toast.error("Código inválido");
       return;
@@ -41,6 +56,7 @@ function RoomsPage() {
   };
 
   return (
+    <>
     <AppLayout>
       <Header subtitle="Estudo em grupo" title="Salas" />
 
@@ -125,5 +141,20 @@ function RoomsPage() {
         </p>
       </section>
     </AppLayout>
+
+      <AuthGate
+        open={authOpen}
+        onClose={() => setAuthOpen(false)}
+        onSignIn={(user) => {
+          signIn(user);
+          setAuthOpen(false);
+          toast(`Bem-vindo, ${user.name.split(" ")[0]}`);
+        }}
+        onContinueAsGuest={() => {
+          setAuthOpen(false);
+          toast("Você pode explorar o app sem conta.");
+        }}
+      />
+    </>
   );
 }
