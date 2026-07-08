@@ -49,24 +49,25 @@ const GAME_TYPES: {
     id: "fill-blank",
     title: "Complete a palavra",
     description: "Preencha o espaço em branco",
-    icon: <TextCursorInput className="h-6 w-6" />,
+    icon: <TextCursorInput className="h-[18px] w-[18px]" strokeWidth={1.75} />,
     color: "primary",
   },
   {
     id: "multiple-choice",
     title: "Escolha múltipla",
     description: "Identifique a referência correta",
-    icon: <ListChecks className="h-6 w-6" />,
+    icon: <ListChecks className="h-[18px] w-[18px]" strokeWidth={1.75} />,
     color: "accent",
   },
   {
     id: "order-words",
     title: "Ordene as palavras",
     description: "Monte o versículo na ordem certa",
-    icon: <Blocks className="h-6 w-6" />,
+    icon: <Blocks className="h-[18px] w-[18px]" strokeWidth={1.75} />,
     color: "fun",
   },
 ];
+
 
 function PlayPage() {
   const navigate = useNavigate();
