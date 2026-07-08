@@ -219,3 +219,111 @@ export function getLastStudiedObjective(objectives: Objective[]): Objective | nu
   );
   return studied[0];
 }
+
+/**
+ * Update an objective's name and/or description.
+ */
+export function updateObjective(
+  objectiveId: string,
+  updates: { name?: string; description?: string },
+  objectives: Objective[],
+): Objective[] {
+  const updated = objectives.map((o) =>
+    o.id === objectiveId
+      ? {
+          ...o,
+          name: updates.name?.trim() ?? o.name,
+          description: updates.description !== undefined
+            ? (updates.description.trim() || undefined)
+            : o.description,
+        }
+      : o,
+  );
+  saveObjectives(updated);
+  return updated;
+}
+
+/**
+ * Delete an objective. Also removes its custom items from the items list
+ * (but not seed items).
+ */
+export function deleteObjective(
+  objectiveId: string,
+  objectives: Objective[],
+  customItems: MemoryItem[],
+): { objectives: Objective[]; customItems: MemoryItem[] } {
+  const obj = objectives.find((o) => o.id === objectiveId);
+  if (!obj) return { objectives, customItems };
+  const customIds = new Set(customItems.map((i) => i.id));
+  const itemIdsToRemove = obj.itemIds.filter((id) => customIds.has(id));
+  const updatedItems = customItems.filter((i) => !itemIdsToRemove.includes(i.id));
+  saveCustomItems(updatedItems);
+  const updatedObjectives = objectives.filter((o) => o.id !== objectiveId);
+  saveObjectives(updatedObjectives);
+  return { objectives: updatedObjectives, customItems: updatedItems };
+}
+
+/**
+ * Update a custom item's fields.
+ */
+export function updateCustomItem(
+  itemId: string,
+  updates: Partial<Omit<MemoryItem, "id" | "createdAt">>,
+  customItems: MemoryItem[],
+): MemoryItem[] {
+  const updated = customItems.map((i) =>
+    i.id === itemId ? { ...i, ...updates } : i,
+  );
+  saveCustomItems(updated);
+  return updated;
+}
+
+/**
+ * Delete a custom item from storage and remove it from any objectives.
+ */
+export function deleteCustomItem(
+  itemId: string,
+  objectives: Objective[],
+  customItems: MemoryItem[],
+): { objectives: Objective[]; customItems: MemoryItem[] } {
+  const updatedItems = customItems.filter((i) => i.id !== itemId);
+  saveCustomItems(updatedItems);
+  const updatedObjectives = objectives.map((o) => ({
+    ...o,
+    itemIds: o.itemIds.filter((id) => id !== itemId),
+  }));
+  saveObjectives(updatedObjectives);
+  return { objectives: updatedObjectives, customItems: updatedItems };
+}
+
+/**
+ * Duplicate a custom item and add the copy to the same objective.
+ */
+export function duplicateCustomItem(
+  itemId: string,
+  objectiveId: string,
+  objectives: Objective[],
+  customItems: MemoryItem[],
+): { objectives: Objective[]; customItems: MemoryItem[] } {
+  const original = customItems.find((i) => i.id === itemId);
+  if (!original) return { objectives, customItems };
+  const newId = `item-${Date.now()}`;
+  const copy: MemoryItem = {
+    ...original,
+    id: newId,
+    title: `${original.title} (cópia)`,
+    createdAt: new Date().toISOString(),
+    reviewCount: 0,
+    mastery: 0,
+    lastReviewedAt: undefined,
+  };
+  const updatedItems = [copy, ...customItems];
+  saveCustomItems(updatedItems);
+  const updatedObjectives = objectives.map((o) =>
+    o.id === objectiveId
+      ? { ...o, itemIds: [...o.itemIds, newId] }
+      : o,
+  );
+  saveObjectives(updatedObjectives);
+  return { objectives: updatedObjectives, customItems: updatedItems };
+}

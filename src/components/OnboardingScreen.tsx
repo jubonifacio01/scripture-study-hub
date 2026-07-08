@@ -1,13 +1,33 @@
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { BookOpen, Landmark, ArrowRight } from "lucide-react";
 import type { AppMode } from "@/hooks/useAppMode";
 import { MemorizeMark } from "@/components/MemorizeMark";
+import { CharacterSelection } from "@/components/CharacterSelection";
 
 interface OnboardingScreenProps {
   onSelect: (mode: AppMode) => void;
 }
 
 export function OnboardingScreen({ onSelect }: OnboardingScreenProps) {
+  const [phase, setPhase] = useState<"mode" | "character">("mode");
+  const [chosenMode, setChosenMode] = useState<AppMode | null>(null);
+
+  const handleModeSelect = (mode: AppMode) => {
+    setChosenMode(mode);
+    setPhase("character");
+  };
+
+  const handleCharacterConfirm = () => {
+    if (chosenMode) {
+      onSelect(chosenMode);
+    }
+  };
+
+  if (phase === "character") {
+    return <CharacterSelection onSelect={handleCharacterConfirm} />;
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <div
@@ -51,7 +71,7 @@ export function OnboardingScreen({ onSelect }: OnboardingScreenProps) {
             title="Modo Estudo"
             description="Organize seus próprios textos, crie objetivos e fortaleça sua memória diariamente."
             buttonLabel="Começar"
-            onClick={() => onSelect("study")}
+            onClick={() => handleModeSelect("study")}
           />
           <ModeCard
             index={1}
@@ -59,7 +79,7 @@ export function OnboardingScreen({ onSelect }: OnboardingScreenProps) {
             title="Modo Jornada"
             description="Explore personagens, acontecimentos e temas bíblicos através de jornadas guiadas de aprendizado."
             buttonLabel="Explorar"
-            onClick={() => onSelect("journey")}
+            onClick={() => handleModeSelect("journey")}
           />
         </div>
 

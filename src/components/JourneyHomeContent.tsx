@@ -1,101 +1,134 @@
 import { Link } from "@tanstack/react-router";
-import { ArrowRight, BookOpen, Milestone, Scroll, Sparkles, Heart, Compass } from "lucide-react";
-import { loadObjectives } from "@/data/objectives";
-import { ObjectiveCard } from "@/components/ObjectiveCard";
-
-const JOURNEY_HIGHLIGHTS = [
-  {
-    id: "genesis",
-    icon: Sparkles,
-    title: "Criação & Origem",
-    description: "O começo de tudo — da criação ao chamado de Abraão.",
-    chapters: 12,
-  },
-  {
-    id: "psalms",
-    icon: Heart,
-    title: "Salmos da Alma",
-    description: "Louvor, lamento e confiança nas palavras de Davi.",
-    chapters: 8,
-  },
-  {
-    id: "gospels",
-    icon: Compass,
-    title: "A Vida de Jesus",
-    description: "Ensinamentos, milagres e a missão do Filho de Deus.",
-    chapters: 15,
-  },
-];
+import { ArrowRight, ArrowUpRight, BookOpen } from "lucide-react";
+import { JOURNEYS, getJourneyById } from "@/data/journeyContent";
+import {
+  getJourneyStats,
+  getLastActiveSession,
+  formatJourneyLastActivity,
+} from "@/data/journeys";
+import { JourneyCover } from "@/components/JourneyCover";
 
 export function JourneyHomeContent() {
+  // Find the journey with most recent activity for "Continue" card
+  const activeJourney = JOURNEYS.map((j) => ({
+    journey: j,
+    stats: getJourneyStats(j, j.id),
+  }))
+    .filter(({ stats }) => stats.completedSessions > 0)
+    .sort((a, b) => {
+      const aTime = a.stats.lastActivity ? new Date(a.stats.lastActivity).getTime() : 0;
+      const bTime = b.stats.lastActivity ? new Date(b.stats.lastActivity).getTime() : 0;
+      return bTime - aTime;
+    })[0];
+
+  const continueData = activeJourney
+    ? (() => {
+        const last = getLastActiveSession(activeJourney.journey, activeJourney.journey.id);
+        if (!last) return null;
+        return {
+          journey: activeJourney.journey,
+          chapter: last.chapter,
+          session: last.session,
+          sessionIndex: last.sessionIndex,
+        };
+      })()
+    : null;
+
   return (
     <div className="mt-8 flex flex-col gap-8">
+      {/* Continue Journey card */}
+      {continueData && (
+        <section>
+          <p className="mb-3 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+            Continue
+          </p>
+          <Link
+            to="/play"
+            search={{
+              journey: continueData.journey.id,
+              chapter: continueData.chapter.id,
+              session: continueData.session.id,
+            }}
+            className="press card-elevated block overflow-hidden transition-colors hover:border-foreground/20"
+          >
+            <div className="h-24">
+              <JourneyCover journey={continueData.journey} className="h-full w-full" />
+            </div>
+            <div className="p-5">
+              <p className="text-xs font-medium tracking-tight text-primary">
+                {continueData.journey.title}
+              </p>
+              <h2 className="mt-1.5 text-[20px] font-semibold leading-snug tracking-tight">
+                {continueData.chapter.title}
+              </h2>
+              <p className="mt-1 text-[13px] text-muted-foreground">
+                Sessão: {continueData.sessionIndex + 1} de{" "}
+                {continueData.chapter.sessions.length}
+              </p>
+
+              <div className="mt-5 flex items-center justify-between">
+                <span className="text-sm font-medium text-foreground">Continuar jornada</span>
+                <span className="grid h-8 w-8 place-items-center rounded-full bg-foreground text-background">
+                  <ArrowUpRight className="h-4 w-4" strokeWidth={2} />
+                </span>
+              </div>
+            </div>
+          </Link>
+        </section>
+      )}
+
+      {/* All journeys */}
       <section>
         <p className="mb-3 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-          Jornadas em destaque
+          Jornadas disponíveis
         </p>
-        <div className="flex flex-col gap-2.5">
-          {JOURNEY_HIGHLIGHTS.map((j) => {
-            const Icon = j.icon;
+        <div className="flex flex-col gap-3">
+          {JOURNEYS.map((journey) => {
+            const stats = getJourneyStats(journey, journey.id);
             return (
               <Link
-                key={j.id}
+                key={journey.id}
                 to="/play"
-                className="press card-elevated flex items-center gap-4 p-4 transition-colors hover:border-foreground/15"
+                search={{ journey: journey.id }}
+                className="press card-elevated overflow-hidden transition-colors hover:border-foreground/15"
               >
-                <div className="grid h-12 w-12 shrink-0 place-items-center rounded-[14px] bg-muted text-foreground">
-                  <Icon className="h-5 w-5" strokeWidth={1.5} />
+                <div className="h-28">
+                  <JourneyCover journey={journey} className="h-full w-full" />
                 </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-[15px] font-semibold tracking-tight">{j.title}</p>
-                  <p className="mt-0.5 truncate text-xs text-muted-foreground">{j.description}</p>
+                <div className="p-5">
+                  <h2 className="text-[17px] font-semibold tracking-tight">
+                    {journey.title}
+                  </h2>
+                  <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
+                    {journey.description}
+                  </p>
+
+                  <div className="mt-4 flex items-center justify-between">
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                      <span>{stats.completedSessions} de {stats.totalSessions} sessões</span>
+                      <span className="text-border">·</span>
+                      <span>{stats.pct}%</span>
+                    </div>
+                    <span className="flex items-center gap-1 text-[13px] font-medium text-primary">
+                      {stats.completedSessions > 0 ? "Continuar" : "Começar"}
+                      <ArrowRight className="h-3.5 w-3.5" strokeWidth={2} />
+                    </span>
+                  </div>
+
+                  {stats.completedSessions > 0 && (
+                    <div className="mt-3 h-[3px] w-full overflow-hidden rounded-full bg-muted">
+                      <div
+                        className="h-full rounded-full bg-primary transition-[width] duration-700 ease-out"
+                        style={{ width: `${stats.pct}%` }}
+                      />
+                    </div>
+                  )}
                 </div>
-                <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={1.75} />
               </Link>
             );
           })}
         </div>
       </section>
-
-      <section>
-        <p className="mb-3 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-          Temas para explorar
-        </p>
-        <div className="grid grid-cols-2 gap-2">
-          <ThemeChip icon={<Milestone className="h-4 w-4" strokeWidth={1.75} />} label="Fé" />
-          <ThemeChip icon={<BookOpen className="h-4 w-4" strokeWidth={1.75} />} label="Sabedoria" />
-          <ThemeChip icon={<Scroll className="h-4 w-4" strokeWidth={1.75} />} label="Profecia" />
-          <ThemeChip icon={<Heart className="h-4 w-4" strokeWidth={1.75} />} label="Esperança" />
-        </div>
-      </section>
-
-      <section>
-        <div className="mb-3 flex items-baseline justify-between">
-          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-            Coleções disponíveis
-          </p>
-          <Link to="/collections" className="text-xs font-medium text-primary hover:underline">
-            Ver todas
-          </Link>
-        </div>
-        <div className="flex flex-col gap-2">
-          {loadObjectives().slice(0, 3).map((o) => (
-            <ObjectiveCard key={o.id} objective={o} />
-          ))}
-        </div>
-      </section>
     </div>
-  );
-}
-
-function ThemeChip({ icon, label }: { icon: React.ReactNode; label: string }) {
-  return (
-    <button
-      type="button"
-      className="press card-elevated flex items-center gap-2.5 p-3.5 transition-colors hover:border-foreground/15"
-    >
-      <span className="text-muted-foreground">{icon}</span>
-      <span className="text-[13px] font-medium tracking-tight">{label}</span>
-    </button>
   );
 }
