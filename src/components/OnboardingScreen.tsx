@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
 import { BookOpen, Landmark, ArrowRight } from "lucide-react";
 import type { AppMode } from "@/hooks/useAppMode";
+import { MemorizeMark } from "@/components/MemorizeMark";
 
 interface OnboardingScreenProps {
   onSelect: (mode: AppMode) => void;
@@ -20,18 +21,19 @@ export function OnboardingScreen({ onSelect }: OnboardingScreenProps) {
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-          className="pt-10"
+          className="flex items-center gap-2 pt-10"
         >
-          <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+          <MemorizeMark size={22} strokeWidth={1.5} className="text-foreground" />
+          <span className="text-[13px] font-semibold tracking-tight text-foreground">
             Memorize+
-          </p>
+          </span>
         </motion.header>
 
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.55, delay: 0.08, ease: [0.22, 1, 0.36, 1] }}
-          className="mt-10"
+          className="mt-12"
         >
           <h1 className="text-[28px] font-semibold leading-[1.15] tracking-tight text-foreground">
             Como você deseja estudar hoje?
@@ -46,7 +48,6 @@ export function OnboardingScreen({ onSelect }: OnboardingScreenProps) {
           <ModeCard
             index={0}
             icon={<BookOpen className="h-5 w-5" strokeWidth={1.5} />}
-            emoji="📚"
             title="Modo Estudo"
             description="Organize seus próprios textos, crie objetivos e fortaleça sua memória diariamente."
             buttonLabel="Começar"
@@ -55,7 +56,6 @@ export function OnboardingScreen({ onSelect }: OnboardingScreenProps) {
           <ModeCard
             index={1}
             icon={<Landmark className="h-5 w-5" strokeWidth={1.5} />}
-            emoji="🏛️"
             title="Modo Jornada"
             description="Explore personagens, acontecimentos e temas bíblicos através de jornadas guiadas de aprendizado."
             buttonLabel="Explorar"
@@ -79,14 +79,13 @@ export function OnboardingScreen({ onSelect }: OnboardingScreenProps) {
 interface ModeCardProps {
   index: number;
   icon: React.ReactNode;
-  emoji: string;
   title: string;
   description: string;
   buttonLabel: string;
   onClick: () => void;
 }
 
-function ModeCard({ index, icon, emoji, title, description, buttonLabel, onClick }: ModeCardProps) {
+function ModeCard({ index, icon, title, description, buttonLabel, onClick }: ModeCardProps) {
   return (
     <motion.button
       type="button"
@@ -99,19 +98,14 @@ function ModeCard({ index, icon, emoji, title, description, buttonLabel, onClick
         ease: [0.22, 1, 0.36, 1],
       }}
       whileTap={{ scale: 0.985 }}
-      className="group w-full rounded-2xl border border-border bg-card p-6 text-left shadow-soft transition-colors hover:border-foreground/15"
+      className="group w-full rounded-[20px] border border-border bg-card p-6 text-left shadow-soft transition-colors hover:border-foreground/15"
     >
       <div className="flex items-start gap-4">
-        <div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-muted text-foreground">
+        <div className="grid h-12 w-12 shrink-0 place-items-center rounded-[14px] bg-muted text-foreground">
           {icon}
         </div>
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="text-base" aria-hidden>
-              {emoji}
-            </span>
-            <h2 className="text-[17px] font-semibold tracking-tight text-foreground">{title}</h2>
-          </div>
+          <h2 className="text-[17px] font-semibold tracking-tight text-foreground">{title}</h2>
           <p className="mt-2 text-[13px] leading-relaxed text-muted-foreground">{description}</p>
         </div>
       </div>

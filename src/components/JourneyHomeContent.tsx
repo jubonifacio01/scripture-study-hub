@@ -1,26 +1,26 @@
 import { Link } from "@tanstack/react-router";
-import { ArrowRight, BookOpen, Milestone, Scroll } from "lucide-react";
-import { collections } from "@/data/collections";
-import { CollectionCard } from "@/components/CollectionCard";
+import { ArrowRight, BookOpen, Milestone, Scroll, Sparkles, Heart, Compass } from "lucide-react";
+import { loadObjectives } from "@/data/objectives";
+import { ObjectiveCard } from "@/components/ObjectiveCard";
 
 const JOURNEY_HIGHLIGHTS = [
   {
     id: "genesis",
-    emoji: "🌱",
+    icon: Sparkles,
     title: "Criação & Origem",
     description: "O começo de tudo — da criação ao chamado de Abraão.",
     chapters: 12,
   },
   {
     id: "psalms",
-    emoji: "🎶",
+    icon: Heart,
     title: "Salmos da Alma",
     description: "Louvor, lamento e confiança nas palavras de Davi.",
     chapters: 8,
   },
   {
     id: "gospels",
-    emoji: "✦",
+    icon: Compass,
     title: "A Vida de Jesus",
     description: "Ensinamentos, milagres e a missão do Filho de Deus.",
     chapters: 15,
@@ -35,22 +35,25 @@ export function JourneyHomeContent() {
           Jornadas em destaque
         </p>
         <div className="flex flex-col gap-2.5">
-          {JOURNEY_HIGHLIGHTS.map((j) => (
-            <Link
-              key={j.id}
-              to="/play"
-              className="press card-elevated flex items-center gap-4 p-4 transition-colors hover:border-foreground/15"
-            >
-              <div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-muted text-2xl">
-                {j.emoji}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-[15px] font-semibold tracking-tight">{j.title}</p>
-                <p className="mt-0.5 truncate text-xs text-muted-foreground">{j.description}</p>
-              </div>
-              <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={1.75} />
-            </Link>
-          ))}
+          {JOURNEY_HIGHLIGHTS.map((j) => {
+            const Icon = j.icon;
+            return (
+              <Link
+                key={j.id}
+                to="/play"
+                className="press card-elevated flex items-center gap-4 p-4 transition-colors hover:border-foreground/15"
+              >
+                <div className="grid h-12 w-12 shrink-0 place-items-center rounded-[14px] bg-muted text-foreground">
+                  <Icon className="h-5 w-5" strokeWidth={1.5} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[15px] font-semibold tracking-tight">{j.title}</p>
+                  <p className="mt-0.5 truncate text-xs text-muted-foreground">{j.description}</p>
+                </div>
+                <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={1.75} />
+              </Link>
+            );
+          })}
         </div>
       </section>
 
@@ -62,7 +65,7 @@ export function JourneyHomeContent() {
           <ThemeChip icon={<Milestone className="h-4 w-4" strokeWidth={1.75} />} label="Fé" />
           <ThemeChip icon={<BookOpen className="h-4 w-4" strokeWidth={1.75} />} label="Sabedoria" />
           <ThemeChip icon={<Scroll className="h-4 w-4" strokeWidth={1.75} />} label="Profecia" />
-          <ThemeChip icon={<span className="text-sm">🕊</span>} label="Esperança" />
+          <ThemeChip icon={<Heart className="h-4 w-4" strokeWidth={1.75} />} label="Esperança" />
         </div>
       </section>
 
@@ -76,8 +79,8 @@ export function JourneyHomeContent() {
           </Link>
         </div>
         <div className="flex flex-col gap-2">
-          {collections.slice(0, 3).map((c) => (
-            <CollectionCard key={c.id} collection={c} compact />
+          {loadObjectives().slice(0, 3).map((o) => (
+            <ObjectiveCard key={o.id} objective={o} />
           ))}
         </div>
       </section>

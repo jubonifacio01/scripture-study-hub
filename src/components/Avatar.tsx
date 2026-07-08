@@ -1,3 +1,5 @@
+import { MemorizeMark } from "@/components/MemorizeMark";
+
 interface AvatarProps {
   name: string;
   seed?: string;
@@ -5,27 +7,17 @@ interface AvatarProps {
   className?: string;
 }
 
-function initials(name: string) {
-  return name
-    .split(" ")
-    .map((s) => s[0])
-    .filter(Boolean)
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
-}
-
 export function Avatar({ name, size = 64, className = "" }: AvatarProps) {
   return (
     <div
       className={
-        "grid shrink-0 place-items-center rounded-full bg-muted font-medium text-foreground " +
+        "grid shrink-0 place-items-center rounded-full bg-muted text-foreground " +
         className
       }
-      style={{ width: size, height: size, fontSize: size / 2.8, letterSpacing: "-0.02em" }}
+      style={{ width: size, height: size }}
       aria-hidden
     >
-      {initials(name)}
+      <MemorizeMark size={Math.round(size * 0.5)} strokeWidth={1.5} />
     </div>
   );
 }

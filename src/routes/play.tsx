@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { AppLayout } from "@/components/AppLayout";
 import { Header } from "@/components/Header";
@@ -11,23 +11,27 @@ import { ScoreCard } from "@/components/ScoreCard";
 import { CountdownOverlay } from "@/components/CountdownOverlay";
 import { Timer } from "@/components/Timer";
 import { Button } from "@/components/ui/button";
-import { collections } from "@/data/collections";
-import { memoryItems, getItemById } from "@/data/memoryItems";
+import { EmptyState } from "@/components/EmptyState";
+import { loadObjectives, getObjectiveItems, loadCustomItems, markObjectiveStudied } from "@/data/objectives";
+import { memoryItems } from "@/data/memoryItems";
 import { pickRandom } from "@/games/gameUtils";
-import type { Difficulty, GameType, MemoryItem } from "@/types";
-import { Blocks, ListChecks, TextCursorInput } from "lucide-react";
+import type { Difficulty, GameType, MemoryItem, Objective } from "@/types";
+import { Blocks, ListChecks, TextCursorInput, BookOpen } from "lucide-react";
 
 export const Route = createFileRoute("/play")({
   head: () => ({
     meta: [
-      { title: "Jogar — Memorize+" },
+      { title: "Praticar — Memorize+" },
       {
         name: "description",
-        content: "Escolha uma coleção, a dificuldade e comece a memorizar jogando.",
+        content: "Escolha um objetivo, a dificuldade e comece a memorizar.",
       },
     ],
   }),
   component: PlayPage,
+  validateSearch: (search: Record<string, unknown>) => ({
+    objective: (search.objective as string) || undefined,
+  }),
 });
 
 type Phase = "setup" | "playing" | "done";
@@ -68,11 +72,13 @@ const GAME_TYPES: {
   },
 ];
 
-
 function PlayPage() {
   const navigate = useNavigate();
+  const search = Route.useSearch();
   const [phase, setPhase] = useState<Phase>("setup");
-  const [collectionId, setCollectionId] = useState(collections[0].id);
+  const [objectives, setObjectives] = useState<Objective[]>([]);
+  const [customItems, setCustomItems] = useState<MemoryItem[]>([]);
+  const [objectiveId, setObjectiveId] = useState<string | undefined>(undefined);
   const [difficulty, setDifficulty] = useState<Difficulty>("medio");
   const [count, setCount] = useState(5);
   const [gameType, setGameType] = useState<GameType>("fill-blank");
@@ -82,16 +88,34 @@ function PlayPage() {
   const [combo, setCombo] = useState(0);
   const [countdown, setCountdown] = useState(false);
 
+  useEffect(() => {
+    const objs = loadObjectives();
+    setObjectives(objs);
+    setCustomItems(loadCustomItems());
+    if (search.objective) {
+      setObjectiveId(search.objective);
+    } else if (objs.length > 0) {
+      setObjectiveId(objs[0].id);
+    }
+  }, []);
+
+  const activeObjective = objectives.find((o) => o.id === objectiveId);
+  const availableItems = activeObjective
+    ? getObjectiveItems(activeObjective, customItems)
+    : [];
+
   const start = (type: GameType) => {
-    const col = collections.find((c) => c.id === collectionId)!;
-    const items = col.itemIds.map(getItemById).filter(Boolean) as MemoryItem[];
-    const q = pickRandom(items, Math.min(count, items.length));
+    if (!activeObjective || availableItems.length === 0) return;
+    const q = pickRandom(availableItems, Math.min(count, availableItems.length));
     setQueue(q);
     setStep(0);
     setCorrect(0);
     setCombo(0);
     setGameType(type);
     setCountdown(true);
+    // Mark objective as studied
+    const updated = markObjectiveStudied(activeObjective.id, objectives);
+    setObjectives(updated);
   };
 
   const onAnswer = (isRight: boolean) => {
@@ -161,7 +185,6 @@ function PlayPage() {
           {phase === "playing" ? <Timer seconds={30} running /> : null}
         </div>
 
-
         <div className="mt-4">
           <AnimatePresence mode="wait">
             {phase === "playing" && item ? (
@@ -198,7 +221,6 @@ function PlayPage() {
     );
   }
 
-
   if (phase === "done") {
     return (
       <AppLayout>
@@ -214,102 +236,151 @@ function PlayPage() {
     );
   }
 
-
+  // --- Setup phase ---
   return (
     <AppLayout>
       <Header subtitle="Nova sessão" title="Praticar" />
 
-      <Section title="Coleção">
-        <div className="flex flex-col gap-2">
-          {collections.map((c) => {
-            const active = c.id === collectionId;
-            return (
-              <button
-                key={c.id}
-                onClick={() => setCollectionId(c.id)}
-                className={
-                  "press flex items-center gap-3 rounded-xl border p-3 text-left transition-colors " +
-                  (active
-                    ? "border-primary bg-primary/5"
-                    : "border-border bg-card hover:border-foreground/20")
-                }
+      {objectives.length === 0 ? (
+        <div className="mt-8">
+          <EmptyState
+            icon={<BookOpen className="h-5 w-5" strokeWidth={1.5} />}
+            title="Nenhum objetivo ainda"
+            description="Crie um objetivo na Biblioteca e adicione textos para começar a praticar."
+            action={
+              <Button
+                onClick={() => navigate({ to: "/collections" })}
+                className="h-11 rounded-[16px] bg-primary text-primary-foreground hover:bg-primary/90"
               >
-                <span className="grid h-10 w-10 place-items-center rounded-lg bg-muted text-lg">
-                  {c.emoji}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[14px] font-medium tracking-tight">
-                    {c.name}
-                  </span>
-                  <span className="block truncate text-xs text-muted-foreground">
-                    {c.itemIds.length} versículos
-                  </span>
-                </span>
-              </button>
-            );
-          })}
+                Ir para a Biblioteca
+              </Button>
+            }
+          />
         </div>
-      </Section>
+      ) : (
+        <>
+          <Section title="Objetivo">
+            <div className="flex flex-col gap-2">
+              {objectives.map((o) => {
+                const active = o.id === objectiveId;
+                const itemCount = getObjectiveItems(o, customItems).length;
+                return (
+                  <button
+                    key={o.id}
+                    onClick={() => setObjectiveId(o.id)}
+                    className={
+                      "press flex items-center gap-3 rounded-[16px] border p-3.5 text-left transition-colors " +
+                      (active
+                        ? "border-primary bg-primary/5"
+                        : "border-border bg-card hover:border-foreground/15")
+                    }
+                  >
+                    <div className="grid h-10 w-10 shrink-0 place-items-center rounded-[12px] bg-muted text-foreground">
+                      <BookOpen className="h-4 w-4" strokeWidth={1.5} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <span className="block truncate text-[14px] font-medium tracking-tight">
+                        {o.name}
+                      </span>
+                      <span className="block truncate text-xs text-muted-foreground">
+                        {itemCount} {itemCount === 1 ? "texto" : "textos"}
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </Section>
 
-      <Section title="Dificuldade">
-        <div className="grid grid-cols-3 gap-2">
-          {DIFFICULTIES.map((d) => {
-            const active = d.id === difficulty;
-            return (
-              <button
-                key={d.id}
-                onClick={() => setDifficulty(d.id)}
-                className={
-                  "press rounded-xl border p-3 text-center transition-colors " +
-                  (active
-                    ? "border-primary bg-primary/5"
-                    : "border-border bg-card hover:border-foreground/20")
+          {activeObjective && availableItems.length === 0 && (
+            <div className="mt-6">
+              <EmptyState
+                icon={<BookOpen className="h-5 w-5" strokeWidth={1.5} />}
+                title="Este objetivo não tem textos"
+                description="Adicione textos a este objetivo na Biblioteca para começar a praticar."
+                action={
+                  <Button
+                    onClick={() =>
+                      navigate({
+                        to: "/collections",
+                        search: { objective: activeObjective.id },
+                      })
+                    }
+                    variant="outline"
+                    className="h-11 rounded-[16px]"
+                  >
+                    Adicionar textos
+                  </Button>
                 }
-              >
-                <p className="text-[13px] font-medium tracking-tight">{d.label}</p>
-                <p className="mt-1 text-[10px] text-muted-foreground">{d.hint}</p>
-              </button>
-            );
-          })}
-        </div>
-      </Section>
+              />
+            </div>
+          )}
 
-      <Section title="Quantidade de questões">
-        <div className="grid grid-cols-4 gap-2">
-          {[3, 5, 8, 10].map((n) => {
-            const active = n === count;
-            return (
-              <button
-                key={n}
-                onClick={() => setCount(n)}
-                className={
-                  "press rounded-xl border py-3 text-center text-[15px] font-medium tabular-nums tracking-tight transition-colors " +
-                  (active
-                    ? "border-primary bg-primary/5 text-primary"
-                    : "border-border bg-card hover:border-foreground/20")
-                }
-              >
-                {n}
-              </button>
-            );
-          })}
-        </div>
-      </Section>
+          {activeObjective && availableItems.length > 0 && (
+            <>
+              <Section title="Dificuldade">
+                <div className="grid grid-cols-3 gap-2">
+                  {DIFFICULTIES.map((d) => {
+                    const active = d.id === difficulty;
+                    return (
+                      <button
+                        key={d.id}
+                        onClick={() => setDifficulty(d.id)}
+                        className={
+                          "press rounded-[14px] border p-3.5 text-center transition-colors " +
+                          (active
+                            ? "border-primary bg-primary/5"
+                            : "border-border bg-card hover:border-foreground/15")
+                        }
+                      >
+                        <p className="text-[13px] font-medium tracking-tight">{d.label}</p>
+                        <p className="mt-1 text-[10px] text-muted-foreground">{d.hint}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </Section>
 
-      <Section title="Escolha um desafio">
-        <div className="flex flex-col gap-2">
-          {GAME_TYPES.map((g) => (
-            <GameCard
-              key={g.id}
-              title={g.title}
-              description={g.description}
-              icon={g.icon}
-              color={g.color}
-              onClick={() => start(g.id)}
-            />
-          ))}
-        </div>
-      </Section>
+              <Section title="Quantidade de questões">
+                <div className="grid grid-cols-4 gap-2">
+                  {[3, 5, 8, 10].map((n) => {
+                    const active = n === count;
+                    return (
+                      <button
+                        key={n}
+                        onClick={() => setCount(n)}
+                        className={
+                          "press rounded-[14px] border py-3 text-center text-[15px] font-medium tabular-nums tracking-tight transition-colors " +
+                          (active
+                            ? "border-primary bg-primary/5 text-primary"
+                            : "border-border bg-card hover:border-foreground/15")
+                        }
+                      >
+                        {n}
+                      </button>
+                    );
+                  })}
+                </div>
+              </Section>
+
+              <Section title="Escolha um desafio">
+                <div className="flex flex-col gap-2">
+                  {GAME_TYPES.map((g) => (
+                    <GameCard
+                      key={g.id}
+                      title={g.title}
+                      description={g.description}
+                      icon={g.icon}
+                      color={g.color}
+                      onClick={() => start(g.id)}
+                    />
+                  ))}
+                </div>
+              </Section>
+            </>
+          )}
+        </>
+      )}
     </AppLayout>
   );
 }
@@ -324,4 +395,3 @@ function Section({ title, children }: { title: string; children: React.ReactNode
     </section>
   );
 }
-
