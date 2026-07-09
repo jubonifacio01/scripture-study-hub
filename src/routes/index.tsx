@@ -7,7 +7,7 @@ import { OnboardingScreen } from "@/components/OnboardingScreen";
 import { StudyHomeContent } from "@/components/StudyHomeContent";
 import { JourneyHomeContent } from "@/components/JourneyHomeContent";
 import { useAppMode } from "@/hooks/useAppMode";
-import { getSelectedCharacter, getCharacterById, CHARACTERS } from "@/data/characters";
+import { useUserStats, getTimeBasedGreeting, getAppSubtitle } from "@/hooks/useUserStats";
 
 export const Route = createFileRoute("/")({
   component: HomePage,
@@ -15,9 +15,7 @@ export const Route = createFileRoute("/")({
 
 function HomePage() {
   const { mode, setMode, userName, setUserName, ready } = useAppMode();
-  const charId = getSelectedCharacter();
-  const character = getCharacterById(charId) ?? CHARACTERS[0];
-  const displayName = userName || "Peregrino";
+  const stats = useUserStats();
 
   if (!ready) {
     return <div className="min-h-screen bg-background" />;
@@ -34,11 +32,15 @@ function HomePage() {
     );
   }
 
+  const displayName = userName || "Peregrino";
+  const greeting = getTimeBasedGreeting();
+  const subtitle = getAppSubtitle(mode, stats);
+
   return (
     <AppLayout>
       <Header
-        subtitle={`Bom dia, ${displayName}`}
-        title={mode === "study" ? "Um pequeno passo hoje." : "Sua jornada aguarda."}
+        subtitle={`${greeting}, ${displayName}.`}
+        title={subtitle}
         right={<ModeSwitcher mode={mode} onChange={setMode} />}
       />
 
@@ -50,7 +52,7 @@ function HomePage() {
           exit={{ opacity: 0, y: -4 }}
           transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
         >
-          {mode === "study" ? <StudyHomeContent /> : <JourneyHomeContent />}
+          {mode === "study" ? <StudyHomeContent stats={stats} /> : <JourneyHomeContent lastStudyDate={stats.lastStudyDate} sessionsCompleted={stats.sessionsCompleted} />}
         </motion.div>
       </AnimatePresence>
     </AppLayout>

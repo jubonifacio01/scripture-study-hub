@@ -1,9 +1,8 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { ProgressCard } from "@/components/ProgressCard";
 import { ObjectiveCard } from "@/components/ObjectiveCard";
 import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/ui/button";
-import { demoUser, dailyGoal } from "@/data/user";
+import { XPBar } from "@/components/XPBar";
 import {
   loadObjectives,
   loadCustomItems,
@@ -11,15 +10,17 @@ import {
   getObjectiveItems,
   getObjectiveProgress,
 } from "@/data/objectives";
-import { ArrowUpRight, Flame, Target, BookOpen, Sparkles } from "lucide-react";
+import { ArrowUpRight, Flame, Target, BookOpen, Sparkles, Clock, Zap } from "lucide-react";
 import type { ReactNode } from "react";
 import { useMemo } from "react";
+import { formatLastStudyDate, type UserStats } from "@/hooks/useUserStats";
 
-export function StudyHomeContent() {
+interface StudyHomeContentProps {
+  stats: UserStats;
+}
+
+export function StudyHomeContent({ stats }: StudyHomeContentProps) {
   const navigate = useNavigate();
-  const u = demoUser;
-  const goalPct = Math.round((dailyGoal.completed / dailyGoal.target) * 100);
-  const goalDone = dailyGoal.completed >= dailyGoal.target;
 
   const { objectives, lastObjective, customItems } = useMemo(() => {
     const objs = loadObjectives();
@@ -34,6 +35,13 @@ export function StudyHomeContent() {
   const hasObjectives = objectives.length > 0;
   const lastItems = lastObjective ? getObjectiveItems(lastObjective, customItems) : [];
   const lastProgress = lastObjective ? getObjectiveProgress(lastObjective, customItems) : null;
+
+  // Determine which stats to show
+  const showStreak = stats.streak > 0;
+  const showAccuracy = stats.studiedTexts > 0 && stats.accuracy > 0;
+  const showTexts = stats.totalTexts > 0;
+  const showLastStudy = stats.lastStudyDate !== null;
+  const activeStatsCount = [showStreak, showAccuracy, showTexts].filter(Boolean).length;
 
   return (
     <div className="mt-8 flex flex-col gap-8">
@@ -97,50 +105,80 @@ export function StudyHomeContent() {
         </section>
       )}
 
-      {/* Daily goal — subtle line */}
-      <section>
-        <div className="flex items-baseline justify-between">
-          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-            Meta diária
-          </p>
-          <span className="text-xs tabular-nums text-muted-foreground">
-            {dailyGoal.completed} / {dailyGoal.target} {dailyGoal.unit}
-          </span>
-        </div>
-        <div className="mt-3 h-[3px] w-full overflow-hidden rounded-full bg-muted">
-          <div
-            className="h-full rounded-full bg-primary transition-[width] duration-700 ease-out"
-            style={{ width: `${Math.min(100, goalPct)}%` }}
-          />
-        </div>
-        <p className="mt-2 text-xs text-muted-foreground">
-          {goalDone
-            ? "Meta cumprida. Continue no seu ritmo."
-            : `Faltam ${dailyGoal.target - dailyGoal.completed} ${dailyGoal.unit} para completar hoje.`}
-        </p>
-      </section>
+      {/* Stats — only show if there's real data */}
+      {activeStatsCount > 0 && (
+        <section
+          className="grid divide-x divide-border rounded-[20px] border border-border bg-card shadow-soft"
+          style={{ gridTemplateColumns: `repeat(${activeStatsCount}, 1fr)` }}
+        >
+          {showStreak && (
+            <QuickStat
+              icon={<Flame className="h-3.5 w-3.5" strokeWidth={1.75} />}
+              value={`${stats.streak}`}
+              label="sequência"
+            />
+          )}
+          {showAccuracy && (
+            <QuickStat
+              icon={<Target className="h-3.5 w-3.5" strokeWidth={1.75} />}
+              value={`${stats.accuracy}%`}
+              label="precisão"
+            />
+          )}
+          {showTexts && (
+            <QuickStat
+              icon={<BookOpen className="h-3.5 w-3.5" strokeWidth={1.75} />}
+              value={`${stats.studiedTexts}`}
+              label="estudados"
+            />
+          )}
+        </section>
+      )}
 
-      {/* Stats — inline, typography as protagonist */}
-      <section className="grid grid-cols-3 divide-x divide-border rounded-[20px] border border-border bg-card shadow-soft">
-        <QuickStat
-          icon={<Flame className="h-3.5 w-3.5" strokeWidth={1.75} />}
-          value={`${u.streak}`}
-          label="sequência"
-        />
-        <QuickStat
-          icon={<Target className="h-3.5 w-3.5" strokeWidth={1.75} />}
-          value={`${u.accuracy}%`}
-          label="precisão"
-        />
-        <QuickStat
-          icon={<BookOpen className="h-3.5 w-3.5" strokeWidth={1.75} />}
-          value={`${u.itemsStudied}`}
-          label="versículos"
-        />
-      </section>
+      {/* Last study indicator */}
+      {showLastStudy && (
+        <section className="flex items-center gap-3 rounded-[16px] border border-border bg-card p-4">
+          <div className="grid h-9 w-9 place-items-center rounded-[12px] bg-muted">
+            <Clock className="h-4 w-4 text-muted-foreground" strokeWidth={1.75} />
+          </div>
+          <div>
+            <p className="text-[13px] font-medium text-foreground">
+              Último estudo: {formatLastStudyDate(stats.lastStudyDate)}
+            </p>
+            <p className="text-[11px] text-muted-foreground">
+              Continue praticando para melhorar sua memorização
+            </p>
+          </div>
+        </section>
+      )}
 
-      {/* Journey progress */}
-      <ProgressCard level={u.level} xp={u.xp} xpToNext={u.xpToNext} />
+      {/* XP Progress */}
+      {stats.totalXP > 0 && (
+        <section className="rounded-[20px] border border-border bg-card p-5 shadow-soft">
+          <div className="flex items-baseline justify-between">
+            <div>
+              <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                Sua jornada
+              </p>
+              <h2 className="mt-1 text-lg font-semibold tracking-tight">Nível {stats.level}</h2>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Zap className="h-3.5 w-3.5 text-primary" strokeWidth={1.75} />
+              <span className="text-xs text-muted-foreground">
+                <span className="font-medium text-foreground tabular-nums">{stats.xpToNext}</span> XP restantes
+              </span>
+            </div>
+          </div>
+          <div className="mt-4">
+            <XPBar level={stats.level} xp={stats.currentLevelXP} xpToNext={stats.xpToNext} />
+          </div>
+          {stats.todayXP > 0 && (
+            <p className="mt-3 text-xs text-muted-foreground">
+              <span className="font-medium text-primary">+{stats.todayXP} XP</span> ganho hoje.
+            </p>
+          )}
+        </section>
+      )}
 
       {/* Objectives in focus */}
       {hasObjectives && (

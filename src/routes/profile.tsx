@@ -7,7 +7,6 @@ import { Avatar } from "@/components/Avatar";
 import { CharacterPortrait } from "@/components/CharacterPortrait";
 import { XPBar } from "@/components/XPBar";
 import { Button } from "@/components/ui/button";
-import { demoUser } from "@/data/user";
 import {
   CHARACTERS,
   getSelectedCharacter,
@@ -15,7 +14,8 @@ import {
   getCharacterById,
 } from "@/data/characters";
 import { useAppMode } from "@/hooks/useAppMode";
-import { Flame, Target, BookOpen, Trophy, Check, Pencil, X, CircleCheck as CheckCircle2 } from "lucide-react";
+import { useUserStats } from "@/hooks/useUserStats";
+import { Flame, Target, BookOpen, Check, Pencil, X, CircleCheck as CheckCircle2, Zap } from "lucide-react";
 import type { ReactNode } from "react";
 import { toast } from "sonner";
 
@@ -30,8 +30,8 @@ export const Route = createFileRoute("/profile")({
 });
 
 function ProfilePage() {
-  const u = demoUser;
   const { userName, setUserName } = useAppMode();
+  const stats = useUserStats();
   const [selectedChar, setSelectedChar] = useState(getSelectedCharacter());
   const [showCharacterPicker, setShowCharacterPicker] = useState(false);
   const [editingName, setEditingName] = useState(false);
@@ -39,7 +39,7 @@ function ProfilePage() {
 
   const handleSelectCharacter = (id: string) => {
     setSelectedCharacter(id);
-    setSelectedCharacter(id);
+    setSelectedChar(id);
     setShowCharacterPicker(false);
     toast("Personagem atualizado.");
   };
@@ -65,6 +65,9 @@ function ProfilePage() {
 
   const currentCharacter = getCharacterById(selectedChar) ?? CHARACTERS[0];
   const displayName = userName || "Peregrino";
+
+  // Determine which stats to show
+  const showStats = stats.totalXP > 0 || stats.studiedTexts > 0 || stats.streak > 0;
 
   return (
     <AppLayout>
@@ -112,17 +115,20 @@ function ProfilePage() {
               </div>
             )}
             <p className="text-xs text-muted-foreground">
-              {currentCharacter.name} · Nível {u.level}
+              {currentCharacter.name} {stats.totalXP > 0 && `· Nível ${stats.level}`}
             </p>
           </div>
         </section>
 
-        <section className="card-elevated p-5">
-          <XPBar xp={u.xp} xpToNext={u.xpToNext} level={u.level} />
-          <p className="mt-3 text-xs text-muted-foreground">
-            Faltam <span className="font-medium text-foreground tabular-nums">{u.xpToNext - u.xp} XP</span> para o próximo nível.
-          </p>
-        </section>
+        {/* XP Progress - only show if user has XP */}
+        {stats.totalXP > 0 && (
+          <section className="rounded-[20px] border border-border bg-card p-5 shadow-soft">
+            <XPBar xp={stats.currentLevelXP} xpToNext={stats.xpToNext} level={stats.level} />
+            <p className="mt-3 text-xs text-muted-foreground">
+              Faltam <span className="font-medium text-foreground tabular-nums">{stats.xpToNext} XP</span> para o próximo nível.
+            </p>
+          </section>
+        )}
 
         <section>
           <div className="mb-3 flex items-baseline justify-between">
@@ -138,36 +144,49 @@ function ProfilePage() {
               Personalizar
             </Button>
           </div>
-          <div className="card-elevated flex items-center gap-4 p-4">
-            <CharacterPortrait character={currentCharacter} size={56} />
-            <div className="min-w-0 flex-1">
-              <p className="text-[15px] font-semibold tracking-tight">
-                {currentCharacter.name}
-              </p>
-              <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
-                {currentCharacter.description}
-              </p>
+          <div className="rounded-[20px] border border-border bg-card p-4 shadow-soft">
+            <div className="flex items-center gap-4">
+              <CharacterPortrait character={currentCharacter} size={56} />
+              <div className="min-w-0 flex-1">
+                <p className="text-[15px] font-semibold tracking-tight">
+                  {currentCharacter.name}
+                </p>
+                <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+                  {currentCharacter.description}
+                </p>
+              </div>
             </div>
           </div>
         </section>
 
-        <section>
-          <p className="mb-3 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-            Estatísticas
-          </p>
-          <div className="grid grid-cols-2 gap-px overflow-hidden rounded-[20px] border border-border bg-border shadow-soft">
-            <StatCell icon={<Flame className="h-4 w-4" strokeWidth={1.75} />} value={`${u.streak} dias`} label="Sequência" />
-            <StatCell icon={<BookOpen className="h-4 w-4" strokeWidth={1.75} />} value={`${u.itemsStudied}`} label="Versículos" />
-            <StatCell icon={<Target className="h-4 w-4" strokeWidth={1.75} />} value={`${u.accuracy}%`} label="Precisão" />
-            <StatCell icon={<Trophy className="h-4 w-4" strokeWidth={1.75} />} value={`${u.xp}`} label="XP total" />
-          </div>
-        </section>
+        {/* Stats - only show if user has activity */}
+        {showStats && (
+          <section>
+            <p className="mb-3 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+              Estatísticas
+            </p>
+            <div className="grid grid-cols-2 gap-px overflow-hidden rounded-[20px] border border-border bg-border shadow-soft">
+              {stats.streak > 0 && (
+                <StatCell icon={<Flame className="h-4 w-4" strokeWidth={1.75} />} value={`${stats.streak} dias`} label="Sequência" />
+              )}
+              {stats.studiedTexts > 0 && (
+                <StatCell icon={<BookOpen className="h-4 w-4" strokeWidth={1.75} />} value={`${stats.studiedTexts}`} label="Estudados" />
+              )}
+              {stats.accuracy > 0 && stats.studiedTexts > 0 && (
+                <StatCell icon={<Target className="h-4 w-4" strokeWidth={1.75} />} value={`${stats.accuracy}%`} label="Precisão" />
+              )}
+              {stats.totalXP > 0 && (
+                <StatCell icon={<Zap className="h-4 w-4" strokeWidth={1.75} />} value={`${stats.totalXP}`} label="XP total" />
+              )}
+            </div>
+          </section>
+        )}
 
         <section>
           <p className="mb-3 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
             Conquistas
           </p>
-          <div className="card-elevated p-6 text-center">
+          <div className="rounded-[20px] border border-border bg-card p-6 text-center shadow-soft">
             <p className="text-sm font-medium">Em breve</p>
             <p className="mt-1 text-xs text-muted-foreground">
               Conquistas, ranking e personagens chegam nas próximas versões.

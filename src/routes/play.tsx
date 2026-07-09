@@ -25,6 +25,7 @@ import {
   type JourneySession,
   type JourneyChapter,
 } from "@/data/journeys";
+import { recordSessionXP } from "@/hooks/useXPTracking";
 import type { Difficulty, GameType, MemoryItem, Objective } from "@/types";
 import type { Journey } from "@/data/journeys";
 import {
@@ -184,9 +185,11 @@ function PlayPage() {
     setCombo(nextCombo);
     if (step + 1 >= queue.length) {
       setCorrect(nextCorrect);
-      // Mark session complete
+      const xpEarned = nextCorrect * 10;
+      // Mark session complete and record XP
       if (journey && activeSession) {
         markSessionComplete(journey.id, activeSession.id);
+        recordSessionXP(xpEarned, nextCorrect, queue.length, undefined, journey.id);
       }
       setJourneyPhase("conclusion");
     } else {
@@ -248,6 +251,8 @@ function PlayPage() {
     setCombo(nextCombo);
     if (step + 1 >= queue.length) {
       setCorrect(nextCorrect);
+      const xpEarned = nextCorrect * 10;
+      recordSessionXP(xpEarned, nextCorrect, queue.length, objectiveId ?? undefined);
       setPhase("done");
     } else {
       setCorrect(nextCorrect);

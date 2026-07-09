@@ -1,14 +1,16 @@
 import { Link } from "@tanstack/react-router";
-import { ArrowRight, ArrowUpRight, BookOpen } from "lucide-react";
-import { JOURNEYS, getJourneyById } from "@/data/journeyContent";
-import {
-  getJourneyStats,
-  getLastActiveSession,
-  formatJourneyLastActivity,
-} from "@/data/journeys";
+import { ArrowRight, ArrowUpRight, Clock } from "lucide-react";
+import { JOURNEYS } from "@/data/journeyContent";
+import { getJourneyStats, getLastActiveSession } from "@/data/journeys";
 import { JourneyCover } from "@/components/JourneyCover";
+import { formatLastStudyDate } from "@/hooks/useUserStats";
 
-export function JourneyHomeContent() {
+interface JourneyHomeContentProps {
+  lastStudyDate?: string | null;
+  sessionsCompleted?: number;
+}
+
+export function JourneyHomeContent({ lastStudyDate, sessionsCompleted = 0 }: JourneyHomeContentProps) {
   // Find the journey with most recent activity for "Continue" card
   const activeJourney = JOURNEYS.map((j) => ({
     journey: j,
@@ -34,8 +36,29 @@ export function JourneyHomeContent() {
       })()
     : null;
 
+  const showLastStudy = lastStudyDate !== null;
+
   return (
     <div className="mt-8 flex flex-col gap-8">
+      {/* Last study indicator */}
+      {showLastStudy && (
+        <section className="flex items-center gap-3 rounded-[16px] border border-border bg-card p-4">
+          <div className="grid h-9 w-9 place-items-center rounded-[12px] bg-muted">
+            <Clock className="h-4 w-4 text-muted-foreground" strokeWidth={1.75} />
+          </div>
+          <div>
+            <p className="text-[13px] font-medium text-foreground">
+              Último estudo: {formatLastStudyDate(lastStudyDate)}
+            </p>
+            {sessionsCompleted > 0 && (
+              <p className="text-[11px] text-muted-foreground">
+                {sessionsCompleted} sess{sessionsCompleted > 1 ? "ões" : "ão"} completada{sessionsCompleted > 1 ? "s" : ""}
+              </p>
+            )}
+          </div>
+        </section>
+      )}
+
       {/* Continue Journey card */}
       {continueData && (
         <section>
@@ -49,7 +72,7 @@ export function JourneyHomeContent() {
               chapter: continueData.chapter.id,
               session: continueData.session.id,
             }}
-            className="press card-elevated block overflow-hidden transition-colors hover:border-foreground/20"
+            className="press block overflow-hidden rounded-[20px] border border-border bg-card shadow-soft transition-colors hover:border-foreground/20"
           >
             <div className="h-24">
               <JourneyCover journey={continueData.journey} className="h-full w-full" />
@@ -90,7 +113,7 @@ export function JourneyHomeContent() {
                 key={journey.id}
                 to="/play"
                 search={{ journey: journey.id }}
-                className="press card-elevated overflow-hidden transition-colors hover:border-foreground/15"
+                className="press overflow-hidden rounded-[20px] border border-border bg-card shadow-soft transition-colors hover:border-foreground/15"
               >
                 <div className="h-28">
                   <JourneyCover journey={journey} className="h-full w-full" />
