@@ -43,33 +43,24 @@ import {
   Sparkles,
 } from "lucide-react";
 
-export const Route = createFileRoute("/play")({
-  head: () => ({
-    meta: [
-      { title: "Praticar — Memorize+" },
-      {
-        name: "description",
-        content: "Escolha um objetivo, a dificuldade e comece a memorizar.",
-      },
-    ],
-  }),
-  component: PlayPage,
-  validateSearch: (search: Record<string, unknown>) => ({
-    objective: (search.objective as string) || undefined,
-    journey: (search.journey as string) || undefined,
-    chapter: (search.chapter as string) || undefined,
-    session: (search.session as string) || undefined,
-  }),
-});
-
 type Phase = "setup" | "playing" | "done";
 type JourneyPhase = "chapters" | "intro" | "reading" | "challenges" | "conclusion";
 
-const DIFFICULTIES: { id: Difficulty; label: string; hint: string }[] = [
-  { id: "facil", label: "Fácil", hint: "Palavras curtas ausentes" },
-  { id: "medio", label: "Médio", hint: "Reordenar frases" },
-  { id: "dificil", label: "Difícil", hint: "Referências e ordem" },
+const DIFFICULTIES: { id: Difficulty; label: string; hint: string; gameType: GameType | "random" }[] = [
+  { id: "facil", label: "Fácil", hint: "Múltipla escolha", gameType: "multiple-choice" },
+  { id: "medio", label: "Médio", hint: "Completar palavras", gameType: "fill-blank" },
+  { id: "dificil", label: "Difícil", hint: "Ordenar palavras", gameType: "order-words" },
+  { id: "aleatorio", label: "Aleatório", hint: "Mistura de desafios", gameType: "random" },
 ];
+
+function getGameTypeForDifficulty(difficulty: Difficulty): GameType {
+  const diff = DIFFICULTIES.find((d) => d.id === difficulty);
+  if (!diff || diff.gameType === "random") {
+    const types: GameType[] = ["multiple-choice", "fill-blank", "order-words"];
+    return types[Math.floor(Math.random() * types.length)];
+  }
+  return diff.gameType;
+}
 
 const GAME_TYPES: {
   id: GameType;
@@ -100,6 +91,25 @@ const GAME_TYPES: {
     color: "fun",
   },
 ];
+
+export const Route = createFileRoute("/play")({
+  head: () => ({
+    meta: [
+      { title: "Praticar — Memorize+" },
+      {
+        name: "description",
+        content: "Escolha um objetivo, a dificuldade e comece a memorizar.",
+      },
+    ],
+  }),
+  component: PlayPage,
+  validateSearch: (search: Record<string, unknown>) => ({
+    objective: (search.objective as string) || undefined,
+    journey: (search.journey as string) || undefined,
+    chapter: (search.chapter as string) || undefined,
+    session: (search.session as string) || undefined,
+  }),
+});
 
 function PlayPage() {
   const navigate = useNavigate();
@@ -231,13 +241,14 @@ function PlayPage() {
     ? getObjectiveItems(activeObjective, customItems)
     : [];
 
-  const start = (type: GameType) => {
+  const start = () => {
     if (!activeObjective || availableItems.length === 0) return;
     const q = pickRandom(availableItems, Math.min(count, availableItems.length));
     setQueue(q);
     setStep(0);
     setCorrect(0);
     setCombo(0);
+    const type = getGameTypeForDifficulty(difficulty);
     setGameType(type);
     setCountdown(true);
     // Mark objective as studied
@@ -387,7 +398,7 @@ function PlayPage() {
         <div className="mt-6">
           <ScoreCard
             result={{ correct, total: queue.length, xpEarned: correct * 10 }}
-            onPlayAgain={() => start(gameType)}
+            onPlayAgain={() => start()}
             onExit={() => navigate({ to: "/" })}
           />
         </div>
@@ -478,7 +489,7 @@ function PlayPage() {
           {activeObjective && availableItems.length > 0 && (
             <>
               <Section title="Dificuldade">
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 gap-2">
                   {DIFFICULTIES.map((d) => {
                     const active = d.id === difficulty;
                     return (
@@ -486,7 +497,7 @@ function PlayPage() {
                         key={d.id}
                         onClick={() => setDifficulty(d.id)}
                         className={
-                          "press rounded-[14px] border p-3.5 text-center transition-colors " +
+                          "press rounded-[14px] border p-3.5 text-left transition-colors " +
                           (active
                             ? "border-primary bg-primary/5"
                             : "border-border bg-card hover:border-foreground/15")
@@ -522,20 +533,15 @@ function PlayPage() {
                 </div>
               </Section>
 
-              <Section title="Escolha um desafio">
-                <div className="flex flex-col gap-2">
-                  {GAME_TYPES.map((g) => (
-                    <GameCard
-                      key={g.id}
-                      title={g.title}
-                      description={g.description}
-                      icon={g.icon}
-                      color={g.color}
-                      onClick={() => start(g.id)}
-                    />
-                  ))}
-                </div>
-              </Section>
+              <div className="mt-4">
+                <Button
+                  onClick={() => start()}
+                  className="h-12 w-full rounded-[16px] bg-primary text-[14px] font-medium text-primary-foreground hover:bg-primary/90"
+                >
+                  <Sparkles className="h-4 w-4" strokeWidth={2} />
+                  Começar sessão
+                </Button>
+              </div>
             </>
           )}
         </>

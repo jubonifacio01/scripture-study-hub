@@ -58,7 +58,7 @@ export interface UserProfile {
   reviewToday: number;
 }
 
-export type Difficulty = "facil" | "medio" | "dificil";
+export type Difficulty = "facil" | "medio" | "dificil" | "aleatorio";
 
 export type GameType = "fill-blank" | "multiple-choice" | "order-words";
 
