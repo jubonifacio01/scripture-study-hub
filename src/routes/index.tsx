@@ -8,31 +8,36 @@ import { StudyHomeContent } from "@/components/StudyHomeContent";
 import { JourneyHomeContent } from "@/components/JourneyHomeContent";
 import { useAppMode } from "@/hooks/useAppMode";
 import { getSelectedCharacter, getCharacterById, CHARACTERS } from "@/data/characters";
-import { demoUser } from "@/data/user";
 
 export const Route = createFileRoute("/")({
   component: HomePage,
 });
 
 function HomePage() {
-  const { mode, setMode, ready } = useAppMode();
-  const u = demoUser;
+  const { mode, setMode, userName, setUserName, ready } = useAppMode();
   const charId = getSelectedCharacter();
   const character = getCharacterById(charId) ?? CHARACTERS[0];
-  const firstName = u.name.split(" ")[0];
+  const displayName = userName || "Peregrino";
 
   if (!ready) {
     return <div className="min-h-screen bg-background" />;
   }
 
   if (!mode) {
-    return <OnboardingScreen onSelect={setMode} />;
+    return (
+      <OnboardingScreen
+        onSelect={(selectedMode, name) => {
+          setUserName(name);
+          setMode(selectedMode);
+        }}
+      />
+    );
   }
 
   return (
     <AppLayout>
       <Header
-        subtitle={`Bom dia, ${firstName}`}
+        subtitle={`Bom dia, ${displayName}`}
         title={mode === "study" ? "Um pequeno passo hoje." : "Sua jornada aguarda."}
         right={<ModeSwitcher mode={mode} onChange={setMode} />}
       />

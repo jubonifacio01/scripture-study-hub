@@ -14,7 +14,8 @@ import {
   setSelectedCharacter,
   getCharacterById,
 } from "@/data/characters";
-import { Flame, Target, BookOpen, Trophy, Check } from "lucide-react";
+import { useAppMode } from "@/hooks/useAppMode";
+import { Flame, Target, BookOpen, Trophy, Check, Pencil, X, CircleCheck as CheckCircle2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { toast } from "sonner";
 
@@ -30,8 +31,11 @@ export const Route = createFileRoute("/profile")({
 
 function ProfilePage() {
   const u = demoUser;
+  const { userName, setUserName } = useAppMode();
   const [selectedChar, setSelectedChar] = useState(getSelectedCharacter());
   const [showCharacterPicker, setShowCharacterPicker] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [tempName, setTempName] = useState("");
 
   const handleSelectCharacter = (id: string) => {
     setSelectedCharacter(id);
@@ -40,7 +44,27 @@ function ProfilePage() {
     toast("Personagem atualizado.");
   };
 
+  const handleStartEditName = () => {
+    setTempName(userName || "");
+    setEditingName(true);
+  };
+
+  const handleSaveName = () => {
+    const trimmed = tempName.trim();
+    if (trimmed) {
+      setUserName(trimmed);
+      toast("Nome atualizado.");
+    }
+    setEditingName(false);
+  };
+
+  const handleCancelEditName = () => {
+    setEditingName(false);
+    setTempName("");
+  };
+
   const currentCharacter = getCharacterById(selectedChar) ?? CHARACTERS[0];
+  const displayName = userName || "Peregrino";
 
   return (
     <AppLayout>
@@ -50,7 +74,43 @@ function ProfilePage() {
         <section className="flex items-center gap-4">
           <Avatar size={64} />
           <div className="min-w-0 flex-1">
-            <h2 className="truncate text-lg font-semibold tracking-tight">{u.name}</h2>
+            {editingName ? (
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={tempName}
+                  onChange={(e) => setTempName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleSaveName();
+                    if (e.key === "Escape") handleCancelEditName();
+                  }}
+                  autoFocus
+                  className="h-9 flex-1 rounded-[10px] border border-border bg-background px-3 text-[15px] text-foreground focus:border-foreground/30 focus:outline-none"
+                />
+                <button
+                  onClick={handleCancelEditName}
+                  className="grid h-9 w-9 place-items-center rounded-[10px] text-muted-foreground hover:bg-muted"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={handleSaveName}
+                  className="grid h-9 w-9 place-items-center rounded-[10px] bg-primary text-primary-foreground"
+                >
+                  <CheckCircle2 className="h-4 w-4" />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <h2 className="truncate text-lg font-semibold tracking-tight">{displayName}</h2>
+                <button
+                  onClick={handleStartEditName}
+                  className="grid h-7 w-7 place-items-center rounded-[8px] text-muted-foreground hover:bg-muted hover:text-foreground"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            )}
             <p className="text-xs text-muted-foreground">
               {currentCharacter.name} · Nível {u.level}
             </p>
@@ -64,7 +124,6 @@ function ProfilePage() {
           </p>
         </section>
 
-        {/* Character customization */}
         <section>
           <div className="mb-3 flex items-baseline justify-between">
             <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
@@ -117,7 +176,6 @@ function ProfilePage() {
         </section>
       </div>
 
-      {/* Character picker modal */}
       <AnimatePresence>
         {showCharacterPicker && (
           <motion.div
