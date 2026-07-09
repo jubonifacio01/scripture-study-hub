@@ -33,19 +33,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  ArrowLeft,
-  Plus,
-  FileText,
-  Calendar,
-  RefreshCw,
-  BookOpen,
-  MoreVertical,
-  Pencil,
-  Trash2,
-  Copy,
-  Check,
-} from "lucide-react";
+import { ArrowLeft, Plus, FileText, Calendar, RefreshCw, BookOpen, MoveVertical as MoreVertical, Pencil, Trash2, Copy, Check, Share2, Download, Users } from "lucide-react";
 import type { Objective, MemoryItem } from "@/types";
 import {
   loadObjectives,
@@ -61,6 +49,8 @@ import {
   deleteCustomItem,
   duplicateCustomItem,
 } from "@/data/objectives";
+import { useSharedObjectives } from "@/hooks/useSharedObjectives";
+import { ShareDialog, ImportDialog } from "@/components/ShareDialog";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/collections")({
@@ -94,6 +84,11 @@ function LibraryPage() {
   const [deletingObjective, setDeletingObjective] = useState<Objective | null>(null);
   const [editingText, setEditingText] = useState<MemoryItem | null>(null);
   const [deletingText, setDeletingText] = useState<MemoryItem | null>(null);
+  const [sharingObjective, setSharingObjective] = useState<Objective | null>(null);
+  const [showImport, setShowImport] = useState(false);
+  const [importCode, setImportCode] = useState<string | null>(null);
+
+  const { importedObjectives, shareObjective, importSharedObjective, removeImportedObjective } = useSharedObjectives();
 
   useEffect(() => {
     setObjectives(loadObjectives());
@@ -112,6 +107,68 @@ function LibraryPage() {
       setActiveObjective(null);
     }
   }, [search.objective, objectives]);
+
+  // Check for import code in URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const importParam = params.get("import");
+    if (importParam) {
+      setImportCode(importParam);
+      setShowImport(true);
+      // Clean URL
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, []);
+
+  const handleShare = async (
+    objective: Objective,
+    items: MemoryItem[],
+    permissionLevel: "read_only" | "allow_copy" | "allow_collaboration"
+  ) => {
+    return shareObjective(objective, items, permissionLevel);
+  };
+
+  const handleImport = async (shareCode: string, copyToLibrary: boolean) => {
+    return importSharedObjective(shareCode, copyToLibrary);
+  };
+
+  const handleDuplicateObjective = (obj: Objective) => {
+    const items = getObjectiveItems(obj, customItems);
+    const now = new Date().toISOString();
+
+    const newObjective: Objective = {
+      id: `obj-${Date.now()}`,
+      name: `${obj.name} (cópia)`,
+      description: obj.description,
+      itemIds: [],
+      lastStudiedAt: undefined,
+      createdAt: now,
+    };
+
+    let newCustomItems = [...customItems];
+    const newItemIds: string[] = [];
+
+    for (const item of items) {
+      const newItemId = `item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const newItem: MemoryItem = {
+        ...item,
+        id: newItemId,
+        createdAt: now,
+        reviewCount: 0,
+        mastery: 0,
+        lastReviewedAt: undefined,
+      };
+      newCustomItems = [newItem, ...newCustomItems];
+      newItemIds.push(newItemId);
+    }
+
+    newObjective.itemIds = newItemIds;
+    saveObjectives([newObjective, ...objectives]);
+    saveCustomItems(newCustomItems);
+    setObjectives([newObjective, ...objectives]);
+    setCustomItems(newCustomItems);
+    toast("Objetivo duplicado.");
+  };
 
   const syncState = (objs: Objective[], items: MemoryItem[]) => {
     setObjectives(objs);
@@ -228,6 +285,18 @@ function LibraryPage() {
           Organize seu conhecimento e continue aprendendo.
         </p>
 
+        <div className="mt-4 flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowImport(true)}
+            className="gap-1.5 rounded-full text-[13px] font-medium"
+          >
+            <Download className="h-3.5 w-3.5" strokeWidth={1.75} />
+            Importar
+          </Button>
+        </div>
+
         <div className="mt-6">
           {objectives.length === 0 ? (
             <EmptyState
@@ -245,43 +314,136 @@ function LibraryPage() {
             />
           ) : (
             <div className="flex flex-col gap-2">
-              {objectives.map((obj) => (
-                <div key={obj.id} className="relative">
-                  <ObjectiveCard objective={obj} />
-                  <div className="absolute right-2 top-1/2 -translate-y-1/2">
+              {objectives.map((obj) => {
+                const objItems = getObjectiveItems(obj, customItems);
+                return (
+                  <div key={obj.id} className="relative">
+                    <ObjectiveCard objective={obj} />
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button
+                            className="grid h-8 w-8 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                            aria-label="Opções do objetivo"
+                          >
+                            <MoreVertical className="h-4 w-4" strokeWidth={1.75} />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="rounded-[14px]">
+                          <DropdownMenuItem
+                            onClick={() => setEditingObjective(obj)}
+                            className="gap-2 rounded-[10px]"
+                          >
+                            <Pencil className="h-3.5 w-3.5" strokeWidth={1.75} />
+                            Editar
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => setSharingObjective(obj)}
+                            className="gap-2 rounded-[10px]"
+                          >
+                            <Share2 className="h-3.5 w-3.5" strokeWidth={1.75} />
+                            Compartilhar
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => handleDuplicateObjective(obj)}
+                            className="gap-2 rounded-[10px]"
+                          >
+                            <Copy className="h-3.5 w-3.5" strokeWidth={1.75} />
+                            Duplicar
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onClick={() => setDeletingObjective(obj)}
+                            className="gap-2 rounded-[10px] text-destructive focus:text-destructive"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" strokeWidth={1.75} />
+                            Excluir
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Shared Libraries Section */}
+        {importedObjectives.length > 0 && (
+          <div className="mt-10">
+            <div className="mb-3 flex items-baseline justify-between">
+              <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                Bibliotecas Compartilhadas
+              </p>
+            </div>
+            <div className="flex flex-col gap-2">
+              {importedObjectives.map((shared) => (
+                <div
+                  key={shared.shareCode}
+                  className="rounded-[20px] border border-border bg-card shadow-soft p-4"
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-semibold tracking-tight">
+                        {shared.name}
+                      </p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        Por {shared.ownerName}
+                      </p>
+                    </div>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <button
                           className="grid h-8 w-8 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                          aria-label="Opções do objetivo"
+                          aria-label="Opções"
                         >
                           <MoreVertical className="h-4 w-4" strokeWidth={1.75} />
                         </button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="rounded-[14px]">
                         <DropdownMenuItem
-                          onClick={() => setEditingObjective(obj)}
+                          onClick={() => {
+                            setImportCode(shared.shareCode);
+                            setShowImport(true);
+                          }}
                           className="gap-2 rounded-[10px]"
                         >
-                          <Pencil className="h-3.5 w-3.5" strokeWidth={1.75} />
-                          Editar
+                          <BookOpen className="h-3.5 w-3.5" strokeWidth={1.75} />
+                          Ver conteúdo
                         </DropdownMenuItem>
+                        {shared.objectiveId && (
+                          <DropdownMenuItem
+                            onClick={() => navigate({ to: "/collections", search: { objective: shared.objectiveId } })}
+                            className="gap-2 rounded-[10px]"
+                          >
+                            <BookOpen className="h-3.5 w-3.5" strokeWidth={1.75} />
+                            Abrir na biblioteca
+                          </DropdownMenuItem>
+                        )}
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
-                          onClick={() => setDeletingObjective(obj)}
+                          onClick={() => removeImportedObjective(shared.shareCode)}
                           className="gap-2 rounded-[10px] text-destructive focus:text-destructive"
                         >
                           <Trash2 className="h-3.5 w-3.5" strokeWidth={1.75} />
-                          Excluir
+                          Remover
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
+                  <div className="mt-2 flex items-center gap-2">
+                    <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase">
+                      {shared.permissionLevel === "read_only" && "Somente leitura"}
+                      {shared.permissionLevel === "allow_copy" && "Permitir copiar"}
+                      {shared.permissionLevel === "allow_collaboration" && "Colaboração"}
+                    </span>
+                  </div>
                 </div>
               ))}
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
         <NewObjectiveDialog
           open={showNewObjective}
@@ -321,6 +483,21 @@ function LibraryPage() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        <ShareDialog
+          open={!!sharingObjective}
+          onOpenChange={(v) => !v && setSharingObjective(null)}
+          objective={sharingObjective}
+          items={sharingObjective ? getObjectiveItems(sharingObjective, customItems) : []}
+          onShare={handleShare}
+        />
+
+        <ImportDialog
+          open={showImport}
+          onOpenChange={setShowImport}
+          shareCode={importCode}
+          onImport={handleImport}
+        />
       </AppLayout>
     );
   }
@@ -354,6 +531,20 @@ function LibraryPage() {
                   >
                     <Pencil className="h-3.5 w-3.5" strokeWidth={1.75} />
                     Editar
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => setSharingObjective(activeObjective)}
+                    className="gap-2 rounded-[10px]"
+                  >
+                    <Share2 className="h-3.5 w-3.5" strokeWidth={1.75} />
+                    Compartilhar
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => handleDuplicateObjective(activeObjective)}
+                    className="gap-2 rounded-[10px]"
+                  >
+                    <Copy className="h-3.5 w-3.5" strokeWidth={1.75} />
+                    Duplicar
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
@@ -533,6 +724,21 @@ function LibraryPage() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        <ShareDialog
+          open={!!sharingObjective}
+          onOpenChange={(v) => !v && setSharingObjective(null)}
+          objective={sharingObjective}
+          items={sharingObjective ? getObjectiveItems(sharingObjective, customItems) : []}
+          onShare={handleShare}
+        />
+
+        <ImportDialog
+          open={showImport}
+          onOpenChange={setShowImport}
+          shareCode={importCode}
+          onImport={handleImport}
+        />
       </AppLayout>
     );
   }
