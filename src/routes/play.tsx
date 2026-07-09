@@ -548,6 +548,7 @@ function JourneyPlayView({
   session,
   onOpenChapter,
   onBack,
+  onStartReading,
   onStartChallenges,
   onAnswer,
   onContinue,
