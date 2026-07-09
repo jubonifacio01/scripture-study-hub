@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { QuestionCard } from "@/components/QuestionCard";
-import { Timer } from "@/components/Timer";
+
 import type { SharedQuestion } from "@/lib/roomChannel";
 
 interface Props {
@@ -123,7 +123,10 @@ export function MultiplayerGame({ questions, startAt, secondsPerQuestion, onFini
         <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
           Pergunta {step + 1} / {total}
         </div>
-        <Timer seconds={remaining} total={secondsPerQuestion} />
+        <div className={"inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-xs tabular-nums " + (remaining <= 3 ? "text-destructive" : "text-muted-foreground")}>
+          <span className={"h-1.5 w-1.5 rounded-full " + (remaining <= 3 ? "bg-destructive" : "bg-primary")} />
+          <span className="font-medium">{Math.ceil(remaining)}s</span>
+        </div>
       </div>
       <QuestionCard item={memoItem} prompt="A qual referência este texto pertence?" step={step + 1} total={total}>
         <p className="rounded-2xl bg-muted/60 p-4 text-base italic leading-relaxed">
