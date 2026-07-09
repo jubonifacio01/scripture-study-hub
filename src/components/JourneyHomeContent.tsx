@@ -48,7 +48,7 @@ export function JourneyHomeContent({ lastStudyDate, sessionsCompleted = 0 }: Jou
           </div>
           <div>
             <p className="text-[13px] font-medium text-foreground">
-              Último estudo: {formatLastStudyDate(lastStudyDate)}
+              Último estudo: {formatLastStudyDate(lastStudyDate ?? null)}
             </p>
             {sessionsCompleted > 0 && (
               <p className="text-[11px] text-muted-foreground">
