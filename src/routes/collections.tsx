@@ -1,6 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useState, useEffect, useCallback } from "react";
 import { AppLayout } from "@/components/AppLayout";
 import { Header } from "@/components/Header";
 import { ObjectiveCard } from "@/components/ObjectiveCard";
@@ -33,27 +32,40 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ArrowLeft, Plus, FileText, Calendar, RefreshCw, BookOpen, MoveVertical as MoreVertical, Pencil, Trash2, Copy, Check, Share2, Download, Users } from "lucide-react";
+import {
+  ArrowLeft,
+  Plus,
+  FileText,
+  Calendar,
+  RefreshCw,
+  BookOpen,
+  MoveVertical as MoreVertical,
+  Pencil,
+  Trash2,
+  Copy,
+  Check,
+  Share2,
+  Download,
+  Loader2,
+} from "lucide-react";
 import type { Objective, MemoryItem } from "@/types";
 import {
-  loadObjectives,
-  createObjective,
-  addTextToObjective,
-  getObjectiveItems,
+  fetchObjectives,
+  createObjectiveInDb,
+  updateObjectiveInDb,
+  deleteObjectiveInDb,
+  addMemoryText,
+  updateMemoryText,
+  deleteMemoryText,
+  duplicateMemoryText,
+  duplicateObjectiveInDb,
+  markStudiedLocally,
   getObjectiveProgress,
-  loadCustomItems,
-  markObjectiveStudied,
-  updateObjective,
-  deleteObjective,
-  updateCustomItem,
-  deleteCustomItem,
-  duplicateCustomItem,
-  saveObjectives,
-  saveCustomItems,
-} from "@/data/objectives";
+} from "@/services/ObjectiveService";
 import { useSharedObjectives } from "@/hooks/useSharedObjectives";
 import { ShareDialog, ImportDialog } from "@/components/ShareDialog";
 import { toast } from "sonner";
+import { isSupabaseConfigured } from "@/lib/supabaseClient";
 
 export const Route = createFileRoute("/collections")({
   head: () => ({
@@ -73,11 +85,18 @@ export const Route = createFileRoute("/collections")({
 
 type View = "list" | "detail";
 
+// Map of objectiveId → MemoryItem[] kept in sync with DB
+type ItemsMap = Record<string, MemoryItem[]>;
+
 function LibraryPage() {
   const navigate = useNavigate();
   const search = Route.useSearch();
+
   const [objectives, setObjectives] = useState<Objective[]>([]);
-  const [customItems, setCustomItems] = useState<MemoryItem[]>([]);
+  const [itemsMap, setItemsMap] = useState<ItemsMap>({});
+  const [loading, setLoading] = useState(true);
+  const [dbError, setDbError] = useState<string | null>(null);
+
   const [view, setView] = useState<View>("list");
   const [activeObjective, setActiveObjective] = useState<Objective | null>(null);
   const [showNewObjective, setShowNewObjective] = useState(false);
@@ -90,12 +109,41 @@ function LibraryPage() {
   const [showImport, setShowImport] = useState(false);
   const [importCode, setImportCode] = useState<string | null>(null);
 
-  const { importedObjectives, shareObjective, importSharedObjective, removeImportedObjective } = useSharedObjectives();
+  const { importedObjectives, shareObjective, importSharedObjective, removeImportedObjective } =
+    useSharedObjectives();
+
+  // ─── Load data ──────────────────────────────────────────────────────────────
+
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setDbError(null);
+
+    const { data, error } = await fetchObjectives();
+
+    if (error) {
+      setDbError(error);
+      setLoading(false);
+      return;
+    }
+
+    if (data) {
+      const objs = data.map((r) => r.objective);
+      const map: ItemsMap = {};
+      for (const r of data) {
+        map[r.objective.id] = r.items;
+      }
+      setObjectives(objs);
+      setItemsMap(map);
+    }
+
+    setLoading(false);
+  }, []);
 
   useEffect(() => {
-    setObjectives(loadObjectives());
-    setCustomItems(loadCustomItems());
-  }, []);
+    void loadData();
+  }, [loadData]);
+
+  // ─── URL → detail view ──────────────────────────────────────────────────────
 
   useEffect(() => {
     if (search.objective) {
@@ -110,161 +158,237 @@ function LibraryPage() {
     }
   }, [search.objective, objectives]);
 
-  // Check for import code in URL
+  // ─── Import URL param ───────────────────────────────────────────────────────
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const importParam = params.get("import");
     if (importParam) {
       setImportCode(importParam);
       setShowImport(true);
-      // Clean URL
       window.history.replaceState({}, "", window.location.pathname);
     }
   }, []);
 
+  // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+  const getItems = (obj: Objective): MemoryItem[] => itemsMap[obj.id] ?? [];
+
+  const updateObjectiveInState = (updated: Objective) => {
+    setObjectives((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
+    if (activeObjective?.id === updated.id) setActiveObjective(updated);
+  };
+
+  // ─── Objectives CRUD ────────────────────────────────────────────────────────
+
+  const handleCreateObjective = async (name: string, description: string) => {
+    const { data, error } = await createObjectiveInDb(name, description);
+    if (error || !data) {
+      toast.error(error ?? "Erro ao criar objetivo.");
+      return;
+    }
+    setObjectives((prev) => [data, ...prev]);
+    setItemsMap((prev) => ({ ...prev, [data.id]: [] }));
+    setShowNewObjective(false);
+    toast.success("Objetivo criado.");
+  };
+
+  const handleUpdateObjective = async (name: string, description: string) => {
+    if (!editingObjective) return;
+    const { data, error } = await updateObjectiveInDb(editingObjective.id, { name, description });
+    if (error || !data) {
+      toast.error(error ?? "Erro ao atualizar objetivo.");
+      return;
+    }
+    // Preserve items in the updated objective
+    const withItems = { ...data, itemIds: getItems(editingObjective).map((i) => i.id) };
+    updateObjectiveInState(withItems);
+    setEditingObjective(null);
+    toast.success("Objetivo atualizado.");
+  };
+
+  const handleDeleteObjective = async () => {
+    if (!deletingObjective) return;
+    const { error } = await deleteObjectiveInDb(deletingObjective.id);
+    if (error) {
+      toast.error(error);
+      setDeletingObjective(null);
+      return;
+    }
+    setObjectives((prev) => prev.filter((o) => o.id !== deletingObjective.id));
+    setItemsMap((prev) => {
+      const next = { ...prev };
+      delete next[deletingObjective.id];
+      return next;
+    });
+    setDeletingObjective(null);
+    if (view === "detail" && activeObjective?.id === deletingObjective.id) {
+      navigate({ to: "/collections" });
+    }
+    toast.success("Objetivo removido.");
+  };
+
+  const handleDuplicateObjective = async (obj: Objective) => {
+    const { data, error } = await duplicateObjectiveInDb(obj.id, objectives);
+    if (error || !data) {
+      toast.error(error ?? "Erro ao duplicar objetivo.");
+      return;
+    }
+    setObjectives((prev) => [data.objective, ...prev]);
+    setItemsMap((prev) => ({ ...prev, [data.objective.id]: data.items }));
+    toast.success("Objetivo duplicado.");
+  };
+
+  // ─── Texts CRUD ─────────────────────────────────────────────────────────────
+
+  const handleAddText = async (
+    text: Omit<MemoryItem, "id" | "createdAt" | "reviewCount" | "mastery">,
+    addAnother: boolean,
+  ) => {
+    if (!activeObjective) return;
+    const currentItems = getItems(activeObjective);
+    const { data, error } = await addMemoryText(activeObjective.id, text, currentItems.length);
+    if (error || !data) {
+      toast.error(error ?? "Erro ao salvar texto.");
+      return;
+    }
+    const newItems = [...currentItems, data];
+    setItemsMap((prev) => ({ ...prev, [activeObjective.id]: newItems }));
+    // Update objective itemIds in state
+    const updatedObj = { ...activeObjective, itemIds: newItems.map((i) => i.id) };
+    updateObjectiveInState(updatedObj);
+
+    if (addAnother) {
+      toast.success("Texto salvo. Adicione outro.");
+    } else {
+      setShowAddText(false);
+      toast.success("Texto salvo.");
+    }
+  };
+
+  const handleUpdateText = async (
+    itemId: string,
+    updates: Partial<Omit<MemoryItem, "id" | "createdAt">>,
+  ) => {
+    const { data, error } = await updateMemoryText(itemId, updates);
+    if (error || !data) {
+      toast.error(error ?? "Erro ao atualizar texto.");
+      return;
+    }
+    if (activeObjective) {
+      setItemsMap((prev) => ({
+        ...prev,
+        [activeObjective.id]: (prev[activeObjective.id] ?? []).map((i) =>
+          i.id === itemId ? data : i,
+        ),
+      }));
+    }
+    setEditingText(null);
+    toast.success("Texto atualizado.");
+  };
+
+  const handleDeleteText = async () => {
+    if (!deletingText || !activeObjective) return;
+    const { error } = await deleteMemoryText(deletingText.id);
+    if (error) {
+      toast.error(error);
+      setDeletingText(null);
+      return;
+    }
+    const newItems = getItems(activeObjective).filter((i) => i.id !== deletingText.id);
+    setItemsMap((prev) => ({ ...prev, [activeObjective.id]: newItems }));
+    const updatedObj = { ...activeObjective, itemIds: newItems.map((i) => i.id) };
+    updateObjectiveInState(updatedObj);
+    setDeletingText(null);
+    toast.success("Texto removido.");
+  };
+
+  const handleDuplicateText = async (itemId: string) => {
+    if (!activeObjective) return;
+    const currentItems = getItems(activeObjective);
+    const { data, error } = await duplicateMemoryText(itemId, activeObjective.id, currentItems.length);
+    if (error || !data) {
+      toast.error(error ?? "Erro ao duplicar texto.");
+      return;
+    }
+    const newItems = [...currentItems, data];
+    setItemsMap((prev) => ({ ...prev, [activeObjective.id]: newItems }));
+    const updatedObj = { ...activeObjective, itemIds: newItems.map((i) => i.id) };
+    updateObjectiveInState(updatedObj);
+    toast.success("Texto duplicado.");
+  };
+
+  const handleStartStudy = () => {
+    if (!activeObjective) return;
+    const updated = markStudiedLocally(activeObjective);
+    updateObjectiveInState(updated);
+    navigate({ to: "/play", search: { objective: activeObjective.id } });
+  };
+
+  // ─── Share / Import ──────────────────────────────────────────────────────────
+
   const handleShare = async (
     objective: Objective,
     items: MemoryItem[],
-    permissionLevel: "read_only" | "allow_copy" | "allow_collaboration"
+    permissionLevel: "read_only" | "allow_copy" | "allow_collaboration",
   ) => {
     return shareObjective(objective, items, permissionLevel);
   };
 
   const handleImport = async (shareCode: string, copyToLibrary: boolean) => {
-    return importSharedObjective(shareCode, copyToLibrary);
+    const result = await importSharedObjective(shareCode, copyToLibrary);
+    if (!result.error) void loadData(); // refresh after import
+    return result;
   };
 
-  const handleDuplicateObjective = (obj: Objective) => {
-    const items = getObjectiveItems(obj, customItems);
-    const now = new Date().toISOString();
+  // ─── Render ──────────────────────────────────────────────────────────────────
 
-    const newObjective: Objective = {
-      id: `obj-${Date.now()}`,
-      name: `${obj.name} (cópia)`,
-      description: obj.description,
-      itemIds: [],
-      lastStudiedAt: undefined,
-      createdAt: now,
-    };
-
-    let newCustomItems = [...customItems];
-    const newItemIds: string[] = [];
-
-    for (const item of items) {
-      const newItemId = `item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      const newItem: MemoryItem = {
-        ...item,
-        id: newItemId,
-        createdAt: now,
-        reviewCount: 0,
-        mastery: 0,
-        lastReviewedAt: undefined,
-      };
-      newCustomItems = [newItem, ...newCustomItems];
-      newItemIds.push(newItemId);
-    }
-
-    newObjective.itemIds = newItemIds;
-    saveObjectives([newObjective, ...objectives]);
-    saveCustomItems(newCustomItems);
-    setObjectives([newObjective, ...objectives]);
-    setCustomItems(newCustomItems);
-    toast("Objetivo duplicado.");
-  };
-
-  const syncState = (objs: Objective[], items: MemoryItem[]) => {
-    setObjectives(objs);
-    setCustomItems(items);
-    if (activeObjective) {
-      setActiveObjective(objs.find((o) => o.id === activeObjective.id) ?? null);
-    }
-  };
-
-  const handleCreateObjective = (name: string, description: string) => {
-    const obj = createObjective(name, description, objectives);
-    setObjectives([obj, ...objectives]);
-    setShowNewObjective(false);
-    toast("Objetivo criado.");
-  };
-
-  const handleUpdateObjective = (name: string, description: string) => {
-    if (!editingObjective) return;
-    const updated = updateObjective(
-      editingObjective.id,
-      { name, description },
-      objectives,
+  if (!isSupabaseConfigured()) {
+    return (
+      <AppLayout>
+        <Header subtitle="Biblioteca" title="Seus objetivos" />
+        <div className="mt-8 rounded-[20px] border border-border bg-card p-6 text-center">
+          <p className="text-sm text-muted-foreground">
+            Banco de dados não configurado. Configure as variáveis de ambiente do Supabase para usar a Biblioteca.
+          </p>
+        </div>
+      </AppLayout>
     );
-    setObjectives(updated);
-    if (activeObjective) {
-      setActiveObjective(updated.find((o) => o.id === activeObjective.id) ?? null);
-    }
-    setEditingObjective(null);
-    toast("Objetivo atualizado.");
-  };
+  }
 
-  const handleDeleteObjective = () => {
-    if (!deletingObjective) return;
-    const result = deleteObjective(deletingObjective.id, objectives, customItems);
-    syncState(result.objectives, result.customItems);
-    setDeletingObjective(null);
-    if (view === "detail" && activeObjective?.id === deletingObjective.id) {
-      navigate({ to: "/collections" });
-    }
-    toast("Objetivo removido.");
-  };
-
-  const handleAddText = (
-    text: Omit<MemoryItem, "id" | "createdAt" | "reviewCount" | "mastery">,
-    addAnother: boolean,
-  ) => {
-    if (!activeObjective) return;
-    const result = addTextToObjective(activeObjective.id, text, objectives, customItems);
-    setObjectives(result.objectives);
-    setCustomItems(result.customItems);
-    setActiveObjective(
-      result.objectives.find((o) => o.id === activeObjective.id) ?? null,
+  if (loading) {
+    return (
+      <AppLayout>
+        <Header subtitle="Biblioteca" title="Seus objetivos" />
+        <div className="mt-16 flex justify-center">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      </AppLayout>
     );
-    if (addAnother) {
-      toast("Texto salvo. Adicione outro.");
-    } else {
-      setShowAddText(false);
-      toast("Texto salvo.");
-    }
-  };
+  }
 
-  const handleUpdateText = (
-    itemId: string,
-    updates: Partial<Omit<MemoryItem, "id" | "createdAt">>,
-  ) => {
-    const updated = updateCustomItem(itemId, updates, customItems);
-    setCustomItems(updated);
-    setEditingText(null);
-    toast("Texto atualizado.");
-  };
+  if (dbError) {
+    return (
+      <AppLayout>
+        <Header subtitle="Biblioteca" title="Seus objetivos" />
+        <div className="mt-8 rounded-[20px] border border-destructive/30 bg-destructive/5 p-6 text-center">
+          <p className="text-sm text-destructive">Não foi possível carregar os dados.</p>
+          <p className="mt-1 text-xs text-muted-foreground">{dbError}</p>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void loadData()}
+            className="mt-4 rounded-full"
+          >
+            Tentar novamente
+          </Button>
+        </div>
+      </AppLayout>
+    );
+  }
 
-  const handleDeleteText = () => {
-    if (!deletingText || !activeObjective) return;
-    const result = deleteCustomItem(deletingText.id, objectives, customItems);
-    syncState(result.objectives, result.customItems);
-    setDeletingText(null);
-    toast("Texto removido.");
-  };
+  // ─── List View ───────────────────────────────────────────────────────────────
 
-  const handleDuplicateText = (itemId: string) => {
-    if (!activeObjective) return;
-    const result = duplicateCustomItem(itemId, activeObjective.id, objectives, customItems);
-    syncState(result.objectives, result.customItems);
-    toast("Texto duplicado.");
-  };
-
-  const handleStartStudy = () => {
-    if (!activeObjective) return;
-    const updated = markObjectiveStudied(activeObjective.id, objectives);
-    setObjectives(updated);
-    navigate({ to: "/play", search: { objective: activeObjective.id } });
-  };
-
-  // --- List View ---
   if (view === "list") {
     return (
       <AppLayout>
@@ -316,57 +440,54 @@ function LibraryPage() {
             />
           ) : (
             <div className="flex flex-col gap-2">
-              {objectives.map((obj) => {
-                const objItems = getObjectiveItems(obj, customItems);
-                return (
-                  <div key={obj.id} className="relative">
-                    <ObjectiveCard objective={obj} />
-                    <div className="absolute right-2 top-1/2 -translate-y-1/2">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <button
-                            className="grid h-8 w-8 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                            aria-label="Opções do objetivo"
-                          >
-                            <MoreVertical className="h-4 w-4" strokeWidth={1.75} />
-                          </button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="rounded-[14px]">
-                          <DropdownMenuItem
-                            onClick={() => setEditingObjective(obj)}
-                            className="gap-2 rounded-[10px]"
-                          >
-                            <Pencil className="h-3.5 w-3.5" strokeWidth={1.75} />
-                            Editar
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => setSharingObjective(obj)}
-                            className="gap-2 rounded-[10px]"
-                          >
-                            <Share2 className="h-3.5 w-3.5" strokeWidth={1.75} />
-                            Compartilhar
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => handleDuplicateObjective(obj)}
-                            className="gap-2 rounded-[10px]"
-                          >
-                            <Copy className="h-3.5 w-3.5" strokeWidth={1.75} />
-                            Duplicar
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            onClick={() => setDeletingObjective(obj)}
-                            className="gap-2 rounded-[10px] text-destructive focus:text-destructive"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" strokeWidth={1.75} />
-                            Excluir
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
+              {objectives.map((obj) => (
+                <div key={obj.id} className="relative">
+                  <ObjectiveCard objective={obj} />
+                  <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          className="grid h-8 w-8 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                          aria-label="Opções do objetivo"
+                        >
+                          <MoreVertical className="h-4 w-4" strokeWidth={1.75} />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="rounded-[14px]">
+                        <DropdownMenuItem
+                          onClick={() => setEditingObjective(obj)}
+                          className="gap-2 rounded-[10px]"
+                        >
+                          <Pencil className="h-3.5 w-3.5" strokeWidth={1.75} />
+                          Editar
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => setSharingObjective(obj)}
+                          className="gap-2 rounded-[10px]"
+                        >
+                          <Share2 className="h-3.5 w-3.5" strokeWidth={1.75} />
+                          Compartilhar
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => void handleDuplicateObjective(obj)}
+                          className="gap-2 rounded-[10px]"
+                        >
+                          <Copy className="h-3.5 w-3.5" strokeWidth={1.75} />
+                          Duplicar
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onClick={() => setDeletingObjective(obj)}
+                          className="gap-2 rounded-[10px] text-destructive focus:text-destructive"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" strokeWidth={1.75} />
+                          Excluir
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
-                );
-              })}
+                </div>
+              ))}
             </div>
           )}
         </div>
@@ -387,9 +508,7 @@ function LibraryPage() {
                 >
                   <div className="flex items-start justify-between">
                     <div className="min-w-0 flex-1">
-                      <p className="truncate font-semibold tracking-tight">
-                        {shared.name}
-                      </p>
+                      <p className="truncate font-semibold tracking-tight">{shared.name}</p>
                       <p className="mt-0.5 text-xs text-muted-foreground">
                         Por {shared.ownerName}
                       </p>
@@ -416,7 +535,12 @@ function LibraryPage() {
                         </DropdownMenuItem>
                         {shared.objectiveId && (
                           <DropdownMenuItem
-                            onClick={() => navigate({ to: "/collections", search: { objective: shared.objectiveId } })}
+                            onClick={() =>
+                              navigate({
+                                to: "/collections",
+                                search: { objective: shared.objectiveId },
+                              })
+                            }
                             className="gap-2 rounded-[10px]"
                           >
                             <BookOpen className="h-3.5 w-3.5" strokeWidth={1.75} />
@@ -450,13 +574,13 @@ function LibraryPage() {
         <NewObjectiveDialog
           open={showNewObjective}
           onOpenChange={setShowNewObjective}
-          onCreate={handleCreateObjective}
+          onCreate={(name, desc) => void handleCreateObjective(name, desc)}
         />
 
         <EditObjectiveDialog
           objective={editingObjective}
           onOpenChange={(v) => !v && setEditingObjective(null)}
-          onSave={handleUpdateObjective}
+          onSave={(name, desc) => void handleUpdateObjective(name, desc)}
         />
 
         <AlertDialog
@@ -477,7 +601,7 @@ function LibraryPage() {
             <AlertDialogFooter>
               <AlertDialogCancel className="rounded-[14px]">Cancelar</AlertDialogCancel>
               <AlertDialogAction
-                onClick={handleDeleteObjective}
+                onClick={() => void handleDeleteObjective()}
                 className="rounded-[14px] bg-destructive text-destructive-foreground hover:bg-destructive/90"
               >
                 Excluir
@@ -490,7 +614,7 @@ function LibraryPage() {
           open={!!sharingObjective}
           onOpenChange={(v) => !v && setSharingObjective(null)}
           objective={sharingObjective}
-          items={sharingObjective ? getObjectiveItems(sharingObjective, customItems) : []}
+          items={sharingObjective ? getItems(sharingObjective) : []}
           onShare={handleShare}
         />
 
@@ -504,10 +628,11 @@ function LibraryPage() {
     );
   }
 
-  // --- Detail View ---
+  // ─── Detail View ─────────────────────────────────────────────────────────────
+
   if (view === "detail" && activeObjective) {
-    const items = getObjectiveItems(activeObjective, customItems);
-    const progress = getObjectiveProgress(activeObjective, customItems);
+    const items = getItems(activeObjective);
+    const progress = getObjectiveProgress(activeObjective, items);
 
     return (
       <AppLayout>
@@ -542,7 +667,7 @@ function LibraryPage() {
                     Compartilhar
                   </DropdownMenuItem>
                   <DropdownMenuItem
-                    onClick={() => handleDuplicateObjective(activeObjective)}
+                    onClick={() => void handleDuplicateObjective(activeObjective)}
                     className="gap-2 rounded-[10px]"
                   >
                     <Copy className="h-3.5 w-3.5" strokeWidth={1.75} />
@@ -636,7 +761,7 @@ function LibraryPage() {
                   item={item}
                   onEdit={() => setEditingText(item)}
                   onDelete={() => setDeletingText(item)}
-                  onDuplicate={() => handleDuplicateText(item.id)}
+                  onDuplicate={() => void handleDuplicateText(item.id)}
                 />
               ))}
             </div>
@@ -658,19 +783,19 @@ function LibraryPage() {
         <AddTextDialog
           open={showAddText}
           onOpenChange={setShowAddText}
-          onAdd={handleAddText}
+          onAdd={(text, addAnother) => void handleAddText(text, addAnother)}
         />
 
         <EditTextDialog
           item={editingText}
           onOpenChange={(v) => !v && setEditingText(null)}
-          onSave={handleUpdateText}
+          onSave={(id, updates) => void handleUpdateText(id, updates)}
         />
 
         <EditObjectiveDialog
           objective={editingObjective}
           onOpenChange={(v) => !v && setEditingObjective(null)}
-          onSave={handleUpdateObjective}
+          onSave={(name, desc) => void handleUpdateObjective(name, desc)}
         />
 
         <AlertDialog
@@ -691,7 +816,7 @@ function LibraryPage() {
             <AlertDialogFooter>
               <AlertDialogCancel className="rounded-[14px]">Cancelar</AlertDialogCancel>
               <AlertDialogAction
-                onClick={handleDeleteObjective}
+                onClick={() => void handleDeleteObjective()}
                 className="rounded-[14px] bg-destructive text-destructive-foreground hover:bg-destructive/90"
               >
                 Excluir
@@ -710,15 +835,13 @@ function LibraryPage() {
                 Excluir texto
               </AlertDialogTitle>
               <AlertDialogDescription className="text-sm leading-relaxed text-muted-foreground">
-                {deletingText
-                  ? `"${deletingText.title}" será removido permanentemente.`
-                  : ""}
+                {deletingText ? `"${deletingText.title}" será removido permanentemente.` : ""}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel className="rounded-[14px]">Cancelar</AlertDialogCancel>
               <AlertDialogAction
-                onClick={handleDeleteText}
+                onClick={() => void handleDeleteText()}
                 className="rounded-[14px] bg-destructive text-destructive-foreground hover:bg-destructive/90"
               >
                 Excluir
@@ -731,7 +854,7 @@ function LibraryPage() {
           open={!!sharingObjective}
           onOpenChange={(v) => !v && setSharingObjective(null)}
           objective={sharingObjective}
-          items={sharingObjective ? getObjectiveItems(sharingObjective, customItems) : []}
+          items={sharingObjective ? getItems(sharingObjective) : []}
           onShare={handleShare}
         />
 
@@ -747,6 +870,8 @@ function LibraryPage() {
 
   return null;
 }
+
+// ─── Sub-components (UI only — unchanged from original) ──────────────────────
 
 function TextRow({
   item,
@@ -765,9 +890,7 @@ function TextRow({
         <FileText className="h-4 w-4" strokeWidth={1.5} />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[14px] font-semibold tracking-tight">
-          {item.title}
-        </p>
+        <p className="truncate text-[14px] font-semibold tracking-tight">{item.title}</p>
         <p className="mt-0.5 text-xs text-muted-foreground">
           {item.book} {item.chapter}:{item.verse}
         </p>
@@ -832,9 +955,7 @@ function DetailStat({
       <div className="mx-auto flex items-center justify-center gap-1.5 text-muted-foreground">
         {icon}
       </div>
-      <p className="mt-2 text-[16px] font-semibold tabular-nums tracking-tight">
-        {value}
-      </p>
+      <p className="mt-2 text-[16px] font-semibold tabular-nums tracking-tight">{value}</p>
       <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
         {label}
       </p>
@@ -1032,7 +1153,13 @@ function AddTextDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) reset(); }}>
+    <Dialog
+      open={open}
+      onOpenChange={(v) => {
+        onOpenChange(v);
+        if (!v) reset();
+      }}
+    >
       <DialogContent className="max-h-[85vh] overflow-y-auto rounded-[24px]">
         <DialogHeader>
           <DialogTitle className="text-[18px] font-semibold tracking-tight">
@@ -1071,10 +1198,7 @@ function EditTextDialog({
 }: {
   item: MemoryItem | null;
   onOpenChange: (v: boolean) => void;
-  onSave: (
-    itemId: string,
-    updates: Partial<Omit<MemoryItem, "id" | "createdAt">>,
-  ) => void;
+  onSave: (itemId: string, updates: Partial<Omit<MemoryItem, "id" | "createdAt">>) => void;
 }) {
   const [form, setForm] = useState<TextFormData>({
     title: "",
@@ -1184,9 +1308,7 @@ function TextFormFields({
         </div>
       </div>
       <div>
-        <Label className="text-xs font-medium text-muted-foreground">
-          Texto bíblico
-        </Label>
+        <Label className="text-xs font-medium text-muted-foreground">Texto bíblico</Label>
         <Textarea
           value={form.text}
           onChange={(e) => update("text", e.target.value)}
