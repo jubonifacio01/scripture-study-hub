@@ -1,13 +1,12 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error("Missing Supabase environment variables");
-}
+export const supabase: SupabaseClient | null =
+  supabaseUrl && supabaseAnonKey ? createClient(supabaseUrl, supabaseAnonKey) : null;
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const isSupabaseConfigured = (): boolean => supabase !== null;
 
 export type SharedPermissionLevel = "read_only" | "allow_copy" | "allow_collaboration";
 
@@ -55,6 +54,9 @@ export async function shareObjective(
   ownerName: string,
   permissionLevel: SharedPermissionLevel = "allow_copy"
 ): Promise<{ shareCode: string; error: Error | null }> {
+  if (!supabase) {
+    return { shareCode: "", error: new Error("Supabase não configurado. Compartilhamento requer backend.") };
+  }
   try {
     // Insert shared objective
     const { data: objectiveData, error: objectiveError } = await supabase
@@ -118,6 +120,9 @@ export async function getSharedObjective(shareCode: string): Promise<{
   data: SharedObjectiveWithItems | null;
   error: Error | null;
 }> {
+  if (!supabase) {
+    return { data: null, error: new Error("Supabase não configurado. Importação requer backend.") };
+  }
   try {
     const { data: objectiveData, error: objectiveError } = await supabase
       .from("shared_objectives")
@@ -164,6 +169,9 @@ export async function updateSharedObjectiveItems(
     text: string;
   }>
 ): Promise<{ error: Error | null }> {
+  if (!supabase) {
+    return { error: new Error("Supabase não configurado. Colaboração requer backend.") };
+  }
   try {
     const { data: objectiveData, error: objectiveError } = await supabase
       .from("shared_objectives")
@@ -222,6 +230,9 @@ export async function listRecentSharedObjectives(limit = 10): Promise<{
   data: SharedObjective[];
   error: Error | null;
 }> {
+  if (!supabase) {
+    return { data: [], error: null };
+  }
   try {
     const { data, error } = await supabase
       .from("shared_objectives")
