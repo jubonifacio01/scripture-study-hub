@@ -3,49 +3,44 @@ import { ObjectiveCard } from "@/components/ObjectiveCard";
 import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/ui/button";
 import { XPBar } from "@/components/XPBar";
-import {
-  loadObjectives,
-  loadCustomItems,
-  getLastStudiedObjective,
-  getObjectiveItems,
-  getObjectiveProgress,
-} from "@/data/objectives";
+import { getObjectiveProgress } from "@/services/ObjectiveService";
 import { ArrowUpRight, Flame, Target, BookOpen, Sparkles, Clock, Zap } from "lucide-react";
 import type { ReactNode } from "react";
-import { useMemo } from "react";
 import { formatLastStudyDate, type UserStats } from "@/hooks/useUserStats";
+import type { Objective, MemoryItem } from "@/types";
 
 interface StudyHomeContentProps {
   stats: UserStats;
+  objectives: Objective[];
+  itemsMap: Record<string, MemoryItem[]>;
 }
 
-export function StudyHomeContent({ stats }: StudyHomeContentProps) {
+export function StudyHomeContent({ stats, objectives, itemsMap }: StudyHomeContentProps) {
   const navigate = useNavigate();
 
-  const { objectives, lastObjective, customItems } = useMemo(() => {
-    const objs = loadObjectives();
-    const items = loadCustomItems();
-    return {
-      objectives: objs,
-      lastObjective: getLastStudiedObjective(objs),
-      customItems: items,
-    };
-  }, []);
-
   const hasObjectives = objectives.length > 0;
-  const lastItems = lastObjective ? getObjectiveItems(lastObjective, customItems) : [];
-  const lastProgress = lastObjective ? getObjectiveProgress(lastObjective, customItems) : null;
 
-  // Determine which stats to show
+  // Find the most recently studied objective
+  const lastObjective = objectives.reduce<Objective | null>((best, o) => {
+    if (!o.lastStudiedAt) return best;
+    if (!best || !best.lastStudiedAt) return o;
+    return new Date(o.lastStudiedAt) > new Date(best.lastStudiedAt) ? o : best;
+  }, null) ?? (objectives.length > 0 ? objectives[0] : null);
+
+  const lastItems = lastObjective ? (itemsMap[lastObjective.id] ?? []) : [];
+  const lastProgress = lastObjective
+    ? getObjectiveProgress(lastObjective, lastItems)
+    : null;
+
   const showStreak = stats.streak > 0;
-  const showAccuracy = stats.studiedTexts > 0 && stats.accuracy > 0;
+  const showAccuracy = stats.sessionsCompleted > 0 && stats.accuracy > 0;
   const showTexts = stats.totalTexts > 0;
   const showLastStudy = stats.lastStudyDate !== null;
   const activeStatsCount = [showStreak, showAccuracy, showTexts].filter(Boolean).length;
 
   return (
     <div className="mt-8 flex flex-col gap-8">
-      {/* Continue / Empty state — main entry point */}
+      {/* Continue / Empty state */}
       {hasObjectives && lastObjective && lastItems.length > 0 ? (
         <section>
           <div className="mb-3 flex items-baseline justify-between">
@@ -105,7 +100,7 @@ export function StudyHomeContent({ stats }: StudyHomeContentProps) {
         </section>
       )}
 
-      {/* Stats — only show if there's real data */}
+      {/* Stats */}
       {activeStatsCount > 0 && (
         <section
           className="grid divide-x divide-border rounded-[20px] border border-border bg-card shadow-soft"
@@ -165,7 +160,8 @@ export function StudyHomeContent({ stats }: StudyHomeContentProps) {
             <div className="flex items-center gap-1.5">
               <Zap className="h-3.5 w-3.5 text-primary" strokeWidth={1.75} />
               <span className="text-xs text-muted-foreground">
-                <span className="font-medium text-foreground tabular-nums">{stats.xpToNext}</span> XP restantes
+                <span className="font-medium text-foreground tabular-nums">{stats.xpToNext}</span>{" "}
+                XP restantes
               </span>
             </div>
           </div>

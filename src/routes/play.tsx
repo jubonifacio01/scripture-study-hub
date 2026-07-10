@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { AppLayout } from "@/components/AppLayout";
 import { Header } from "@/components/Header";
@@ -13,9 +13,10 @@ import { Timer } from "@/components/Timer";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/EmptyState";
 import { JourneyCover } from "@/components/JourneyCover";
-import { loadObjectives, getObjectiveItems, loadCustomItems, markObjectiveStudied } from "@/data/objectives";
-import { memoryItems } from "@/data/memoryItems";
-import { pickRandom } from "@/games/gameUtils";
+import { fetchObjectives } from "@/services/ObjectiveService";
+import { saveSessionProgress } from "@/services/ProgressService";
+import { invalidateUserStats } from "@/hooks/useUserStats";
+import { recordSessionXP } from "@/hooks/useXPTracking";
 import { getJourneyById } from "@/data/journeyContent";
 import {
   getJourneyStats,
@@ -25,33 +26,27 @@ import {
   type JourneySession,
   type JourneyChapter,
 } from "@/data/journeys";
-import { recordSessionXP } from "@/hooks/useXPTracking";
+import { pickRandom } from "@/games/gameUtils";
 import type { Difficulty, GameType, MemoryItem, Objective } from "@/types";
 import type { Journey } from "@/data/journeys";
-import {
-  Blocks,
-  ListChecks,
-  TextCursorInput,
-  BookOpen,
-  ArrowLeft,
-  ArrowRight,
-  Check,
-  BookMarked,
-  FileText,
-  Users,
-  Calendar,
-  Sparkles,
-} from "lucide-react";
+import { Blocks, ListChecks, TextCursorInput, BookOpen, ArrowLeft, ArrowRight, Check, BookMarked, FileText, Users, Calendar, Sparkles, Loader as Loader2 } from "lucide-react";
 
 type Phase = "setup" | "playing" | "done";
 type JourneyPhase = "chapters" | "intro" | "reading" | "challenges" | "conclusion";
 
-const DIFFICULTIES: { id: Difficulty; label: string; hint: string; gameType: GameType | "random" }[] = [
+const DIFFICULTIES: {
+  id: Difficulty;
+  label: string;
+  hint: string;
+  gameType: GameType | "random";
+}[] = [
   { id: "facil", label: "Fácil", hint: "Múltipla escolha", gameType: "multiple-choice" },
   { id: "medio", label: "Médio", hint: "Completar palavras", gameType: "fill-blank" },
   { id: "dificil", label: "Difícil", hint: "Ordenar palavras", gameType: "order-words" },
   { id: "aleatorio", label: "Aleatório", hint: "Mistura de desafios", gameType: "random" },
 ];
+
+const QUESTION_COUNTS = [5, 10, 20] as const;
 
 function getGameTypeForDifficulty(difficulty: Difficulty): GameType {
   const diff = DIFFICULTIES.find((d) => d.id === difficulty);
@@ -123,20 +118,25 @@ function PlayPage() {
 
   // Objective mode
   const [phase, setPhase] = useState<Phase>("setup");
+  const [loading, setLoading] = useState(false);
   const [objectives, setObjectives] = useState<Objective[]>([]);
-  const [customItems, setCustomItems] = useState<MemoryItem[]>([]);
+  // All items across all objectives — used as the bank for distractor generation
+  const [allItems, setAllItems] = useState<MemoryItem[]>([]);
+  // Items per objective
+  const [itemsMap, setItemsMap] = useState<Record<string, MemoryItem[]>>({});
   const [objectiveId, setObjectiveId] = useState<string | undefined>(undefined);
   const [difficulty, setDifficulty] = useState<Difficulty>("medio");
-  const [count, setCount] = useState(5);
+  const [count, setCount] = useState<number | "all">(5);
   const [gameType, setGameType] = useState<GameType>("fill-blank");
   const [queue, setQueue] = useState<MemoryItem[]>([]);
   const [step, setStep] = useState(0);
   const [correct, setCorrect] = useState(0);
   const [combo, setCombo] = useState(0);
   const [countdown, setCountdown] = useState(false);
+  const sessionStartRef = useRef<number>(Date.now());
 
   useEffect(() => {
-    // Journey mode
+    // Journey mode — skip Supabase load
     if (search.journey) {
       const j = getJourneyById(search.journey);
       if (j) {
@@ -156,15 +156,29 @@ function PlayPage() {
       }
     }
 
-    // Objective mode
-    const objs = loadObjectives();
-    setObjectives(objs);
-    setCustomItems(loadCustomItems());
-    if (search.objective) {
-      setObjectiveId(search.objective);
-    } else if (objs.length > 0) {
-      setObjectiveId(objs[0].id);
-    }
+    // Objective mode — load from Supabase
+    setLoading(true);
+    fetchObjectives().then(({ data, error }) => {
+      setLoading(false);
+      if (error || !data) return;
+
+      const objs = data.map((r) => r.objective);
+      const map: Record<string, MemoryItem[]> = {};
+      const all: MemoryItem[] = [];
+      for (const r of data) {
+        map[r.objective.id] = r.items;
+        all.push(...r.items);
+      }
+      setObjectives(objs);
+      setItemsMap(map);
+      setAllItems(all);
+
+      if (search.objective) {
+        setObjectiveId(search.objective);
+      } else if (objs.length > 0) {
+        setObjectiveId(objs[0].id);
+      }
+    });
   }, []);
 
   // --- Journey handlers ---
@@ -196,7 +210,6 @@ function PlayPage() {
     if (step + 1 >= queue.length) {
       setCorrect(nextCorrect);
       const xpEarned = nextCorrect * 10;
-      // Mark session complete and record XP
       if (journey && activeSession) {
         markSessionComplete(journey.id, activeSession.id);
         recordSessionXP(xpEarned, nextCorrect, queue.length, undefined, journey.id);
@@ -213,14 +226,12 @@ function PlayPage() {
     const sessionIndex = activeChapter.sessions.findIndex(
       (s) => s.id === activeSession?.id,
     );
-    // Next session in same chapter
     if (sessionIndex < activeChapter.sessions.length - 1) {
       const next = activeChapter.sessions[sessionIndex + 1];
       setActiveSession(next);
       setJourneyPhase("intro");
       return;
     }
-    // Next chapter
     const chapterIndex = journey.chapters.findIndex(
       (c) => c.id === activeChapter.id,
     );
@@ -231,29 +242,25 @@ function PlayPage() {
       setJourneyPhase("intro");
       return;
     }
-    // Journey complete
     navigate({ to: "/" });
   };
 
   // --- Objective handlers ---
   const activeObjective = objectives.find((o) => o.id === objectiveId);
-  const availableItems = activeObjective
-    ? getObjectiveItems(activeObjective, customItems)
-    : [];
+  const availableItems = activeObjective ? (itemsMap[activeObjective.id] ?? []) : [];
 
   const start = () => {
     if (!activeObjective || availableItems.length === 0) return;
-    const q = pickRandom(availableItems, Math.min(count, availableItems.length));
+    const n = count === "all" ? availableItems.length : Math.min(count, availableItems.length);
+    const q = pickRandom(availableItems, n);
     setQueue(q);
     setStep(0);
     setCorrect(0);
     setCombo(0);
     const type = getGameTypeForDifficulty(difficulty);
     setGameType(type);
+    sessionStartRef.current = Date.now();
     setCountdown(true);
-    // Mark objective as studied
-    const updated = markObjectiveStudied(activeObjective.id, objectives);
-    setObjectives(updated);
   };
 
   const onAnswer = (isRight: boolean) => {
@@ -263,7 +270,25 @@ function PlayPage() {
     if (step + 1 >= queue.length) {
       setCorrect(nextCorrect);
       const xpEarned = nextCorrect * 10;
+      const durationMs = Date.now() - sessionStartRef.current;
+
+      // Persist to Supabase user_progress
+      if (objectiveId) {
+        void saveSessionProgress({
+          objectiveId,
+          correct: nextCorrect,
+          total: queue.length,
+          xpEarned,
+          durationMs,
+        });
+      }
+
+      // Also keep XP in localStorage for level calc until full auth migration
       recordSessionXP(xpEarned, nextCorrect, queue.length, objectiveId ?? undefined);
+
+      // Invalidate home screen stats so they refresh
+      invalidateUserStats();
+
       setPhase("done");
     } else {
       setCorrect(nextCorrect);
@@ -296,6 +321,7 @@ function PlayPage() {
           setCountdown(false);
           setJourneyPhase("intro");
         }}
+        bank={allItems}
       />
     );
   }
@@ -364,7 +390,7 @@ function PlayPage() {
                     item={item}
                     step={step + 1}
                     total={queue.length}
-                    bank={memoryItems}
+                    bank={allItems.length > 1 ? allItems : availableItems}
                     onAnswer={onAnswer}
                   />
                 ) : gameType === "multiple-choice" ? (
@@ -372,7 +398,7 @@ function PlayPage() {
                     item={item}
                     step={step + 1}
                     total={queue.length}
-                    bank={memoryItems}
+                    bank={allItems.length > 1 ? allItems : availableItems}
                     onAnswer={onAnswer}
                   />
                 ) : (
@@ -398,7 +424,9 @@ function PlayPage() {
         <div className="mt-6">
           <ScoreCard
             result={{ correct, total: queue.length, xpEarned: correct * 10 }}
-            onPlayAgain={() => start()}
+            onPlayAgain={() => {
+              setPhase("setup");
+            }}
             onExit={() => navigate({ to: "/" })}
           />
         </div>
@@ -411,18 +439,22 @@ function PlayPage() {
     <AppLayout>
       <Header subtitle="Nova sessão" title="Praticar" />
 
-      {objectives.length === 0 ? (
+      {loading ? (
+        <div className="mt-16 flex justify-center">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      ) : objectives.length === 0 ? (
         <div className="mt-8">
           <EmptyState
             icon={<BookOpen className="h-5 w-5" strokeWidth={1.5} />}
-            title="Nenhum objetivo ainda"
-            description="Crie um objetivo na Biblioteca e adicione textos para começar a praticar."
+            title="Você ainda não possui nenhum Objetivo."
+            description="Crie sua primeira Biblioteca para começar seus estudos."
             action={
               <Button
                 onClick={() => navigate({ to: "/collections" })}
                 className="h-11 rounded-[16px] bg-primary text-primary-foreground hover:bg-primary/90"
               >
-                Ir para a Biblioteca
+                Criar Objetivo
               </Button>
             }
           />
@@ -433,7 +465,7 @@ function PlayPage() {
             <div className="flex flex-col gap-2">
               {objectives.map((o) => {
                 const active = o.id === objectiveId;
-                const itemCount = getObjectiveItems(o, customItems).length;
+                const items = itemsMap[o.id] ?? [];
                 return (
                   <button
                     key={o.id}
@@ -453,7 +485,7 @@ function PlayPage() {
                         {o.name}
                       </span>
                       <span className="block truncate text-xs text-muted-foreground">
-                        {itemCount} {itemCount === 1 ? "texto" : "textos"}
+                        {items.length} {items.length === 1 ? "texto" : "textos"}
                       </span>
                     </div>
                   </button>
@@ -488,6 +520,34 @@ function PlayPage() {
 
           {activeObjective && availableItems.length > 0 && (
             <>
+              <Section title="Quantidade de questões">
+                <div className="grid grid-cols-4 gap-2">
+                  {[...QUESTION_COUNTS, "all" as const].map((n) => {
+                    const active = n === count;
+                    const label = n === "all" ? "Todas" : String(n);
+                    const disabled =
+                      n !== "all" && typeof n === "number" && availableItems.length < n;
+                    return (
+                      <button
+                        key={label}
+                        onClick={() => !disabled && setCount(n)}
+                        disabled={disabled}
+                        className={
+                          "press rounded-[14px] border py-3 text-center text-[15px] font-medium tabular-nums tracking-tight transition-colors " +
+                          (active
+                            ? "border-primary bg-primary/5 text-primary"
+                            : disabled
+                              ? "border-border bg-card opacity-40 cursor-not-allowed"
+                              : "border-border bg-card hover:border-foreground/15")
+                        }
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </Section>
+
               <Section title="Dificuldade">
                 <div className="grid grid-cols-2 gap-2">
                   {DIFFICULTIES.map((d) => {
@@ -505,28 +565,6 @@ function PlayPage() {
                       >
                         <p className="text-[13px] font-medium tracking-tight">{d.label}</p>
                         <p className="mt-1 text-[10px] text-muted-foreground">{d.hint}</p>
-                      </button>
-                    );
-                  })}
-                </div>
-              </Section>
-
-              <Section title="Quantidade de questões">
-                <div className="grid grid-cols-4 gap-2">
-                  {[3, 5, 8, 10].map((n) => {
-                    const active = n === count;
-                    return (
-                      <button
-                        key={n}
-                        onClick={() => setCount(n)}
-                        className={
-                          "press rounded-[14px] border py-3 text-center text-[15px] font-medium tabular-nums tracking-tight transition-colors " +
-                          (active
-                            ? "border-primary bg-primary/5 text-primary"
-                            : "border-border bg-card hover:border-foreground/15")
-                        }
-                      >
-                        {n}
                       </button>
                     );
                   })}
@@ -571,6 +609,7 @@ function JourneyPlayView({
   gameType,
   onCountdownDone,
   onExitChallenges,
+  bank,
 }: {
   journey: Journey;
   phase: JourneyPhase;
@@ -590,8 +629,8 @@ function JourneyPlayView({
   gameType: GameType;
   onCountdownDone: () => void;
   onExitChallenges: () => void;
+  bank: MemoryItem[];
 }) {
-  // --- Chapters view (book index) ---
   if (phase === "chapters") {
     const stats = getJourneyStats(journey, journey.id);
     return (
@@ -615,7 +654,6 @@ function JourneyPlayView({
           {journey.description}
         </p>
 
-        {/* Progress summary */}
         <div className="mt-6 card-elevated p-5">
           <div className="flex items-baseline justify-between">
             <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
@@ -633,7 +671,6 @@ function JourneyPlayView({
           </div>
         </div>
 
-        {/* Chapter list — book index style */}
         <div className="mt-8">
           <p className="mb-3 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
             Capítulos
@@ -655,7 +692,8 @@ function JourneyPlayView({
                       {ch.title}
                     </p>
                     <p className="mt-0.5 text-xs text-muted-foreground">
-                      {chStats.totalSessions} {chStats.totalSessions === 1 ? "sessão" : "sessões"}
+                      {chStats.totalSessions}{" "}
+                      {chStats.totalSessions === 1 ? "sessão" : "sessões"}
                     </p>
                   </div>
                   {chStats.isComplete ? (
@@ -667,7 +705,10 @@ function JourneyPlayView({
                       {chStats.pct}%
                     </span>
                   ) : (
-                    <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={1.75} />
+                    <ArrowRight
+                      className="h-4 w-4 shrink-0 text-muted-foreground"
+                      strokeWidth={1.75}
+                    />
                   )}
                 </button>
               );
@@ -678,7 +719,6 @@ function JourneyPlayView({
     );
   }
 
-  // --- Intro view ---
   if (phase === "intro" && chapter && session) {
     return (
       <AppLayout>
@@ -697,7 +737,6 @@ function JourneyPlayView({
             </Button>
           }
         />
-
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
@@ -708,11 +747,8 @@ function JourneyPlayView({
             <BookMarked className="h-3.5 w-3.5" strokeWidth={1.75} />
             Introdução
           </div>
-          <p className="text-[17px] leading-[1.7] text-foreground">
-            {session.intro}
-          </p>
+          <p className="text-[17px] leading-[1.7] text-foreground">{session.intro}</p>
         </motion.div>
-
         <div className="mt-10">
           <Button
             onClick={onStartReading}
@@ -726,7 +762,6 @@ function JourneyPlayView({
     );
   }
 
-  // --- Reading view ---
   if (phase === "reading" && session) {
     return (
       <AppLayout>
@@ -745,7 +780,6 @@ function JourneyPlayView({
             </Button>
           }
         />
-
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
@@ -757,16 +791,11 @@ function JourneyPlayView({
               <p className="text-xs font-medium tracking-tight text-primary">
                 {text.book} {text.chapter}:{text.verse}
               </p>
-              <h2 className="mt-2 text-[18px] font-semibold tracking-tight">
-                {text.title}
-              </h2>
-              <p className="mt-4 text-[16px] leading-[1.8] text-foreground">
-                {text.text}
-              </p>
+              <h2 className="mt-2 text-[18px] font-semibold tracking-tight">{text.title}</h2>
+              <p className="mt-4 text-[16px] leading-[1.8] text-foreground">{text.text}</p>
             </div>
           ))}
         </motion.div>
-
         <div className="mt-8">
           <Button
             onClick={onStartChallenges}
@@ -780,7 +809,6 @@ function JourneyPlayView({
     );
   }
 
-  // --- Challenges view ---
   if (phase === "challenges" && session) {
     const item = queue[step];
     return (
@@ -800,7 +828,6 @@ function JourneyPlayView({
             </Button>
           }
         />
-
         <div className="mt-4 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <div className="rounded-full border border-border bg-card px-2.5 py-1 text-xs tabular-nums">
@@ -824,7 +851,6 @@ function JourneyPlayView({
           </div>
           {!countdown ? <Timer seconds={30} running /> : null}
         </div>
-
         <div className="mt-4">
           <AnimatePresence mode="wait">
             {!countdown && item ? (
@@ -834,7 +860,7 @@ function JourneyPlayView({
                     item={item}
                     step={step + 1}
                     total={queue.length}
-                    bank={memoryItems}
+                    bank={bank.length > 1 ? bank : queue}
                     onAnswer={onAnswer}
                   />
                 ) : gameType === "multiple-choice" ? (
@@ -842,7 +868,7 @@ function JourneyPlayView({
                     item={item}
                     step={step + 1}
                     total={queue.length}
-                    bank={memoryItems}
+                    bank={bank.length > 1 ? bank : queue}
                     onAnswer={onAnswer}
                   />
                 ) : (
@@ -861,7 +887,6 @@ function JourneyPlayView({
     );
   }
 
-  // --- Conclusion view ---
   if (phase === "conclusion" && session) {
     const journeyStats = getJourneyStats(journey, journey.id);
     const chapterStats = chapter ? getChapterStats(chapter, journey.id) : null;
@@ -869,7 +894,6 @@ function JourneyPlayView({
     return (
       <AppLayout>
         <Header subtitle="Resultado" title="Sessão concluída" />
-
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
@@ -893,29 +917,41 @@ function JourneyPlayView({
             </p>
           </div>
 
-          {/* What you learned */}
           <div className="mt-6">
             <p className="mb-3 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
               Hoje você aprendeu
             </p>
             <div className="flex flex-col divide-y divide-border rounded-[20px] border border-border bg-card shadow-soft">
-              <LearnedRow icon={<Users className="h-4 w-4" strokeWidth={1.75} />} label="Personagens" value={session.characters.join(", ")} />
-              <LearnedRow icon={<Calendar className="h-4 w-4" strokeWidth={1.75} />} label="Acontecimentos" value={session.events.join(", ")} />
-              <LearnedRow icon={<FileText className="h-4 w-4" strokeWidth={1.75} />} label="Referências" value={session.references.join(", ")} />
-              <LearnedRow icon={<BookOpen className="h-4 w-4" strokeWidth={1.75} />} label="Texto memorizado" value={session.memorized} />
+              <LearnedRow
+                icon={<Users className="h-4 w-4" strokeWidth={1.75} />}
+                label="Personagens"
+                value={session.characters.join(", ")}
+              />
+              <LearnedRow
+                icon={<Calendar className="h-4 w-4" strokeWidth={1.75} />}
+                label="Acontecimentos"
+                value={session.events.join(", ")}
+              />
+              <LearnedRow
+                icon={<FileText className="h-4 w-4" strokeWidth={1.75} />}
+                label="Referências"
+                value={session.references.join(", ")}
+              />
+              <LearnedRow
+                icon={<BookOpen className="h-4 w-4" strokeWidth={1.75} />}
+                label="Texto memorizado"
+                value={session.memorized}
+              />
             </div>
           </div>
 
-          {/* Progress */}
           <div className="mt-6 grid grid-cols-2 gap-3">
             {chapterStats && (
               <div className="card-elevated p-4">
                 <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
                   Capítulo
                 </p>
-                <p className="mt-1 text-[15px] font-semibold tracking-tight">
-                  {chapter?.title}
-                </p>
+                <p className="mt-1 text-[15px] font-semibold tracking-tight">{chapter?.title}</p>
                 <div className="mt-3 h-[3px] w-full overflow-hidden rounded-full bg-muted">
                   <div
                     className="h-full rounded-full bg-primary transition-[width] duration-700 ease-out"
@@ -931,9 +967,7 @@ function JourneyPlayView({
               <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
                 Jornada
               </p>
-              <p className="mt-1 text-[15px] font-semibold tracking-tight">
-                {journey.title}
-              </p>
+              <p className="mt-1 text-[15px] font-semibold tracking-tight">{journey.title}</p>
               <div className="mt-3 h-[3px] w-full overflow-hidden rounded-full bg-muted">
                 <div
                   className="h-full rounded-full bg-primary transition-[width] duration-700 ease-out"
