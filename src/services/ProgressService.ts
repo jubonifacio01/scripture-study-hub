@@ -23,8 +23,6 @@ export interface ProgressStats {
  * Creates the row if it doesn't exist, otherwise increments it.
  */
 export async function saveSessionProgress(result: SessionResult): Promise<void> {
-  if (!supabase) return;
-
   const userId = getGuestId();
 
   // Fetch existing row (if any)
@@ -75,17 +73,6 @@ export async function saveSessionProgress(result: SessionResult): Promise<void> 
  * Used by the home screen.
  */
 export async function loadProgressStats(): Promise<ProgressStats> {
-  if (!supabase) {
-    return {
-      objectivesCount: 0,
-      totalTexts: 0,
-      sessionsCompleted: 0,
-      lastStudyDate: null,
-      totalXP: 0,
-      accuracy: 0,
-    };
-  }
-
   const userId = getGuestId();
 
   // All progress rows for this user

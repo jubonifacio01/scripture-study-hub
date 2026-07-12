@@ -3,10 +3,10 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-export const supabase: SupabaseClient | null =
-  supabaseUrl && supabaseAnonKey ? createClient(supabaseUrl, supabaseAnonKey) : null;
-
-export const isSupabaseConfigured = (): boolean => supabase !== null;
+export const supabase: SupabaseClient = createClient(
+  supabaseUrl ?? "",
+  supabaseAnonKey ?? "",
+);
 
 export type SharedPermissionLevel = "read_only" | "allow_copy" | "allow_collaboration";
 

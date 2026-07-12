@@ -97,8 +97,6 @@ export interface ObjectiveWithItems {
  * Load all objectives for the current guest, with their memory_texts.
  */
 export async function fetchObjectives(): Promise<ServiceResult<ObjectiveWithItems[]>> {
-  if (!supabase) return { data: [], error: null };
-
   const ownerId = getGuestId();
 
   const { data: objRows, error: objErr } = await supabase
@@ -151,7 +149,6 @@ export async function createObjectiveInDb(
   name: string,
   description: string,
 ): Promise<ServiceResult<Objective>> {
-  if (!supabase) return { data: null, error: "Supabase não configurado." };
 
   const ownerId = getGuestId();
 
@@ -217,8 +214,6 @@ export async function updateObjectiveInDb(
  * Delete an objective and all its memory_texts (cascade handles DB side).
  */
 export async function deleteObjectiveInDb(objectiveId: string): Promise<ServiceResult<void>> {
-  if (!supabase) return { data: null, error: "Supabase não configurado." };
-
   const { error } = await supabase
     .from("objectives")
     .delete()
@@ -237,8 +232,6 @@ export async function addMemoryText(
   item: Omit<MemoryItem, "id" | "createdAt" | "reviewCount" | "mastery">,
   orderIndex: number,
 ): Promise<ServiceResult<MemoryItem>> {
-  if (!supabase) return { data: null, error: "Supabase não configurado." };
-
   const reference = buildReference(item);
 
   const { data, error } = await supabase
@@ -354,7 +347,6 @@ export async function duplicateObjectiveInDb(
   objectiveId: string,
   currentObjectives: Objective[],
 ): Promise<ServiceResult<ObjectiveWithItems>> {
-  if (!supabase) return { data: null, error: "Supabase não configurado." };
 
   const ownerId = getGuestId();
 

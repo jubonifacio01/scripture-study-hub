@@ -73,10 +73,6 @@ export function useRoom({ code, name, isHost, enabled }: UseRoomArgs) {
     if (!enabled || !code) return;
     setStatus("joining");
     const ch = createRoomChannel(code);
-    if (!ch) {
-      setStatus("error");
-      return;
-    }
     channelRef.current = ch;
 
     ch.on("presence", { event: "sync" }, () => {

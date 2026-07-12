@@ -40,8 +40,7 @@ export function generateRoomCode(): string {
 }
 void ADJECTIVES;
 
-export function createRoomChannel(code: string): RealtimeChannel | null {
-  if (!supabase) return null;
+export function createRoomChannel(code: string): RealtimeChannel {
   return supabase.channel(`room:${code}`, {
     config: {
       broadcast: { self: true, ack: false },

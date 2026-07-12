@@ -32,22 +32,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  ArrowLeft,
-  Plus,
-  FileText,
-  Calendar,
-  RefreshCw,
-  BookOpen,
-  MoveVertical as MoreVertical,
-  Pencil,
-  Trash2,
-  Copy,
-  Check,
-  Share2,
-  Download,
-  Loader2,
-} from "lucide-react";
+import { ArrowLeft, Plus, FileText, Calendar, RefreshCw, BookOpen, MoveVertical as MoreVertical, Pencil, Trash2, Copy, Check, Share2, Download, Loader as Loader2 } from "lucide-react";
 import type { Objective, MemoryItem } from "@/types";
 import {
   fetchObjectives,
@@ -65,7 +50,6 @@ import {
 import { useSharedObjectives } from "@/hooks/useSharedObjectives";
 import { ShareDialog, ImportDialog } from "@/components/ShareDialog";
 import { toast } from "sonner";
-import { isSupabaseConfigured } from "@/lib/supabaseClient";
 
 export const Route = createFileRoute("/collections")({
   head: () => ({
@@ -342,19 +326,6 @@ function LibraryPage() {
   };
 
   // ─── Render ──────────────────────────────────────────────────────────────────
-
-  if (!isSupabaseConfigured()) {
-    return (
-      <AppLayout>
-        <Header subtitle="Biblioteca" title="Seus objetivos" />
-        <div className="mt-8 rounded-[20px] border border-border bg-card p-6 text-center">
-          <p className="text-sm text-muted-foreground">
-            Banco de dados não configurado. Configure as variáveis de ambiente do Supabase para usar a Biblioteca.
-          </p>
-        </div>
-      </AppLayout>
-    );
-  }
 
   if (loading) {
     return (
