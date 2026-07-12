@@ -1,160 +1,364 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { RealtimeChannel } from "@supabase/supabase-js";
+import { RealtimeRoomService, type RoomBroadcast } from "@/services/RealtimeRoomService";
 import {
-  createRoomChannel,
-  type RoomBroadcast,
-  type RoomConfig,
-  type RoomParticipant,
-  type SharedQuestion,
-} from "@/lib/roomChannel";
+  createRoom,
+  joinRoom,
+  leaveRoom,
+  updateRoomConfig,
+  updateRoomStatus,
+  updatePlayerReady,
+  updatePlayerScore,
+  resetPlayerStats,
+  getRoomByCode,
+  getRoomPlayers,
+  type ServiceResult,
+} from "@/services/RoomService";
+import { createMatch, finishMatch, buildQuestions, saveMatchProgress } from "@/services/MatchService";
+import { saveAnswer } from "@/services/AnswerService";
+import { calculateScore, calculateXP, buildRanking, type RankingEntry } from "@/services/RankingService";
+import { getGuestId } from "@/lib/guestId";
+import { getUserName } from "@/hooks/useAppMode";
+import { getSelectedCharacter } from "@/data/characters";
+import { loadObjectives, getObjectiveItems, loadCustomItems } from "@/data/objectives";
+import { memoryItems as seedItems } from "@/data/memoryItems";
+import type { Room, RoomPlayer, SharedQuestion, RoomConfig, MultiplayerDifficulty, Match } from "@/types";
 
-const ME_KEY = "memorize-participant-id";
+export type ConnectionStatus = "idle" | "connecting" | "connected" | "error";
 
-function getMyId(): string {
-  if (typeof window === "undefined") return "anon";
-  let id = window.sessionStorage.getItem(ME_KEY);
-  if (!id) {
-    id = "p_" + Math.random().toString(36).slice(2, 10);
-    window.sessionStorage.setItem(ME_KEY, id);
-  }
-  return id;
-}
-
-export interface RoomMatchState {
+export interface MatchState {
   questions: SharedQuestion[];
   startAt: number;
   config: RoomConfig;
+  matchId: string;
 }
 
 interface UseRoomArgs {
   code: string | null;
-  name: string;
   isHost: boolean;
   enabled: boolean;
 }
 
-export function useRoom({ code, name, isHost, enabled }: UseRoomArgs) {
-  const [participants, setParticipants] = useState<RoomParticipant[]>([]);
-  const [status, setStatus] = useState<"idle" | "joining" | "joined" | "error">("idle");
+export function useRoom({ code, isHost, enabled }: UseRoomArgs) {
+  const [room, setRoom] = useState<Room | null>(null);
+  const [players, setPlayers] = useState<RoomPlayer[]>([]);
+  const [status, setStatus] = useState<ConnectionStatus>("idle");
   const [config, setConfig] = useState<RoomConfig | null>(null);
-  const [match, setMatch] = useState<RoomMatchState | null>(null);
-  const channelRef = useRef<RealtimeChannel | null>(null);
-  const meRef = useRef<RoomParticipant>({
-    id: getMyId(),
-    name,
-    isHost,
-    ready: true,
-    done: false,
-    score: 0,
-    correct: 0,
-    timeMs: 0,
-  });
+  const [match, setMatch] = useState<MatchState | null>(null);
+  const [myPlayerId, setMyPlayerId] = useState<string | null>(null);
+  const [matchRecord, setMatchRecord] = useState<Match | null>(null);
 
-  // Keep name/host flag current
-  useEffect(() => {
-    meRef.current = { ...meRef.current, name, isHost };
-  }, [name, isHost]);
+  const realtimeRef = useRef<RealtimeRoomService | null>(null);
+  const roomRef = useRef<Room | null>(null);
+  const myPlayerRef = useRef<RoomPlayer | null>(null);
+  const isHostRef = useRef(isHost);
+  const comboRef = useRef(0);
 
-  const trackSelf = useCallback(async () => {
-    const ch = channelRef.current;
-    if (!ch) return;
-    await ch.track(meRef.current);
+  useEffect(() => { isHostRef.current = isHost; }, [isHost]);
+
+  const displayName = getUserName() ?? "Visitante";
+  const character = getSelectedCharacter();
+
+  const updateMyPlayerRef = useCallback((list: RoomPlayer[]) => {
+    const me = list.find((p) => p.player_id === getGuestId());
+    if (me) {
+      myPlayerRef.current = me;
+      setMyPlayerId(me.id);
+      if (roomRef.current && me.is_host) {
+        isHostRef.current = true;
+      }
+    }
   }, []);
 
-  const updateSelf = useCallback(
-    async (patch: Partial<RoomParticipant>) => {
-      meRef.current = { ...meRef.current, ...patch };
-      await trackSelf();
-    },
-    [trackSelf],
-  );
-
+  // ─── Create or join room ──────────────────────────────────────────────────
   useEffect(() => {
     if (!enabled || !code) return;
-    setStatus("joining");
-    const ch = createRoomChannel(code);
-    channelRef.current = ch;
 
-    ch.on("presence", { event: "sync" }, () => {
-      const state = ch.presenceState<RoomParticipant>();
-      const list: RoomParticipant[] = [];
-      Object.values(state).forEach((entries) => {
-        entries.forEach((e) => {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const p = e as any as RoomParticipant;
-          list.push(p);
-        });
+    let cancelled = false;
+    setStatus("connecting");
+
+    (async () => {
+      if (isHost) {
+        const result = await createRoom(displayName, character, null);
+        if (cancelled) return;
+        if (result.error || !result.data) {
+          setStatus("error");
+          return;
+        }
+        roomRef.current = result.data.room;
+        setRoom(result.data.room);
+        myPlayerRef.current = result.data.player;
+        setMyPlayerId(result.data.player.id);
+        setPlayers([result.data.player]);
+      } else {
+        const result = await joinRoom(code, displayName, character, null);
+        if (cancelled) return;
+        if (result.error || !result.data) {
+          setStatus("error");
+          return;
+        }
+        roomRef.current = result.data.room;
+        setRoom(result.data.room);
+        myPlayerRef.current = result.data.player;
+        setMyPlayerId(result.data.player.id);
+
+        const playersResult = await getRoomPlayers(result.data.room.id);
+        if (!cancelled && playersResult.data) {
+          setPlayers(playersResult.data);
+          updateMyPlayerRef(playersResult.data);
+        }
+      }
+
+      if (cancelled || !roomRef.current) return;
+
+      const roomId = roomRef.current.id;
+      const roomCode = roomRef.current.code;
+
+      const realtime = new RealtimeRoomService(roomId, roomCode, {
+        onPlayersChange: (newPlayers) => {
+          setPlayers(newPlayers);
+          updateMyPlayerRef(newPlayers);
+        },
+        onRoomChange: (updatedRoom) => {
+          roomRef.current = updatedRoom;
+          setRoom(updatedRoom);
+        },
+        onConfig: (cfg) => setConfig(cfg),
+        onStart: (payload) => {
+          setMatch({
+            questions: payload.questions,
+            startAt: payload.startAt,
+            config: payload.config,
+            matchId: payload.matchId,
+          });
+          comboRef.current = 0;
+        },
+        onReset: () => {
+          setMatch(null);
+          setMatchRecord(null);
+          comboRef.current = 0;
+        },
+        onAnswer: () => {},
+        onConnectionChange: (s) => {
+          setStatus(s === "connected" ? "connected" : s === "error" ? "error" : "connecting");
+        },
       });
-      // Deduplicate by id (keep latest)
-      const map = new Map<string, RoomParticipant>();
-      list.forEach((p) => map.set(p.id, p));
-      setParticipants([...map.values()]);
-    });
 
-    ch.on("broadcast", { event: "room" }, ({ payload }) => {
-      const msg = payload as RoomBroadcast;
-      if (msg.type === "config") setConfig(msg.payload);
-      else if (msg.type === "start") {
-        setMatch({
-          questions: msg.payload.questions,
-          startAt: msg.payload.startAt,
-          config: msg.payload.config,
-        });
-        // reset own stats
-        meRef.current = {
-          ...meRef.current,
-          done: false,
-          score: 0,
-          correct: 0,
-          timeMs: 0,
-        };
-        void trackSelf();
-      } else if (msg.type === "reset") {
-        setMatch(null);
-        meRef.current = {
-          ...meRef.current,
-          done: false,
-          score: 0,
-          correct: 0,
-          timeMs: 0,
-        };
-        void trackSelf();
-      }
-    });
-
-    ch.subscribe(async (state) => {
-      if (state === "SUBSCRIBED") {
-        await trackSelf();
-        setStatus("joined");
-      } else if (state === "CHANNEL_ERROR" || state === "TIMED_OUT") {
-        setStatus("error");
-      }
-    });
+      realtime.connect();
+      realtimeRef.current = realtime;
+    })();
 
     return () => {
-      void ch.unsubscribe();
-      channelRef.current = null;
+      cancelled = true;
+      realtimeRef.current?.disconnect();
+      realtimeRef.current = null;
       setStatus("idle");
-      setParticipants([]);
-      setConfig(null);
-      setMatch(null);
     };
-  }, [code, enabled, trackSelf]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [code, enabled]);
 
-  const broadcast = useCallback(async (msg: RoomBroadcast) => {
-    const ch = channelRef.current;
-    if (!ch) return;
-    await ch.send({ type: "broadcast", event: "room", payload: msg });
+  // ─── Public actions ───────────────────────────────────────────────────────
+
+  const broadcast = useCallback((msg: RoomBroadcast) => {
+    realtimeRef.current?.broadcast(msg);
   }, []);
 
+  const publishConfig = useCallback(async (cfg: RoomConfig) => {
+    if (!roomRef.current) return;
+    await updateRoomConfig(roomRef.current.id, {
+      selected_objective: cfg.objectiveId,
+      difficulty: cfg.difficulty,
+      question_count: cfg.questionCount,
+    });
+    broadcast({ type: "config", payload: cfg });
+  }, [broadcast]);
+
+  const toggleReady = useCallback(async (ready: boolean) => {
+    if (!myPlayerRef.current) return;
+    await updatePlayerReady(myPlayerRef.current.id, ready);
+  }, []);
+
+  const startMatch = useCallback(async (cfg: RoomConfig) => {
+    if (!roomRef.current) return;
+
+    const objectives = loadObjectives();
+    const customItems = loadCustomItems();
+    const obj = objectives.find((o) => o.id === cfg.objectiveId);
+    if (!obj) return;
+
+    const items = getObjectiveItems(obj, customItems);
+    if (items.length === 0) return;
+
+    const bank = [...items, ...seedItems];
+    const questions = buildQuestions(items, bank, Math.min(cfg.questionCount, items.length), cfg.difficulty);
+    const startAt = Date.now() + 3500;
+
+    const matchResult = await createMatch(roomRef.current.id);
+    if (!matchResult.data) return;
+    setMatchRecord(matchResult.data);
+
+    await updateRoomStatus(roomRef.current.id, "playing");
+
+    broadcast({
+      type: "start",
+      payload: { questions, startAt, config: { ...cfg, questionCount: questions.length }, matchId: matchResult.data.id },
+    });
+  }, [broadcast]);
+
+  const submitAnswer = useCallback(async (
+    questionIndex: number,
+    questionId: string,
+    answer: string,
+    correct: boolean,
+    elapsedMs: number,
+    secondsPerQuestion: number,
+  ) => {
+    if (!match) return;
+
+    const isCorrect = correct;
+    if (isCorrect) comboRef.current += 1;
+    else comboRef.current = 0;
+
+    const score = calculateScore(isCorrect, elapsedMs, secondsPerQuestion, comboRef.current);
+
+    if (myPlayerRef.current) {
+      const me = myPlayerRef.current;
+      const newScore = me.score + score;
+      const newCorrect = me.correct + (isCorrect ? 1 : 0);
+      const newTimeMs = me.time_ms + elapsedMs;
+      const newCombo = Math.max(me.combo, comboRef.current);
+
+      await updatePlayerScore(me.id, newScore, newCorrect, newTimeMs, newCombo, false);
+
+      broadcast({
+        type: "answer",
+        payload: {
+          playerId: me.id,
+          questionIndex,
+          correct: isCorrect,
+          score: newScore,
+          combo: comboRef.current,
+        },
+      });
+    }
+
+    await saveAnswer(match.matchId, questionId, answer, isCorrect, elapsedMs);
+  }, [match, broadcast]);
+
+  const finishPlaying = useCallback(async (totalCorrect: number, totalQuestions: number, totalTimeMs: number) => {
+    if (!myPlayerRef.current || !match) return;
+
+    const me = myPlayerRef.current;
+    const xpEarned = calculateXP(totalCorrect, totalQuestions, me.score);
+
+    await updatePlayerScore(me.id, me.score, totalCorrect, totalTimeMs, Math.max(me.combo, comboRef.current), true);
+
+    await saveMatchProgress(match.config.objectiveId, totalCorrect, totalQuestions, xpEarned, totalTimeMs);
+  }, [match]);
+
+  const playAgain = useCallback(async () => {
+    if (!roomRef.current) return;
+    await resetPlayerStats(roomRef.current.id);
+    await updateRoomStatus(roomRef.current.id, "waiting");
+    broadcast({ type: "reset", payload: null });
+    setMatch(null);
+    setMatchRecord(null);
+    comboRef.current = 0;
+  }, [broadcast]);
+
+  const leave = useCallback(async () => {
+    if (myPlayerRef.current && roomRef.current) {
+      const wasHost = myPlayerRef.current.is_host;
+      await leaveRoom(roomRef.current.id, myPlayerRef.current.id, wasHost);
+    }
+    realtimeRef.current?.disconnect();
+    realtimeRef.current = null;
+    setStatus("idle");
+    setRoom(null);
+    setPlayers([]);
+    setConfig(null);
+    setMatch(null);
+    setMatchRecord(null);
+    roomRef.current = null;
+    myPlayerRef.current = null;
+  }, []);
+
+  // ─── Reconnection: restore room state on refresh ──────────────────────────
+  useEffect(() => {
+    if (!enabled || !code || isHost) return;
+    if (roomRef.current) return;
+
+    let cancelled = false;
+
+    (async () => {
+      const result = await getRoomByCode(code);
+      if (cancelled || result.error || !result.data) return;
+
+      const roomData = result.data;
+      if (roomData.status === "finished") return;
+
+      const playersResult = await getRoomPlayers(roomData.id);
+      if (cancelled || !playersResult.data) return;
+
+      const me = playersResult.data.find((p) => p.player_id === getGuestId());
+      if (!me) return;
+
+      roomRef.current = roomData;
+      setRoom(roomData);
+      myPlayerRef.current = me;
+      setMyPlayerId(me.id);
+      setPlayers(playersResult.data);
+      updateMyPlayerRef(playersResult.data);
+
+      if (roomData.selected_objective && roomData.difficulty && roomData.question_count) {
+        setConfig({
+          objectiveId: roomData.selected_objective,
+          objectiveName: "",
+          questionCount: roomData.question_count,
+          difficulty: roomData.difficulty as MultiplayerDifficulty,
+        });
+      }
+
+      if (roomData.status === "playing") {
+        const { data: matchData } = await (await import("@/lib/supabaseClient")).supabase
+          .from("matches")
+          .select("*")
+          .eq("room_id", roomData.id)
+          .is("finished_at", null)
+          .order("started_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (matchData) {
+          setMatchRecord(matchData as Match);
+        }
+      }
+    })();
+
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [code, enabled, isHost]);
+
+  const ranking: RankingEntry[] = buildRanking(players);
+
   return {
-    myId: meRef.current.id,
-    participants,
+    room,
+    players,
     status,
     config,
     setConfig,
     match,
+    matchRecord,
+    myPlayerId,
+    myPlayer: myPlayerRef.current,
+    isHost: isHostRef.current,
+    ranking,
     broadcast,
-    updateSelf,
+    publishConfig,
+    toggleReady,
+    startMatch,
+    submitAnswer,
+    finishPlaying,
+    playAgain,
+    leave,
   };
 }
