@@ -15,7 +15,8 @@ import {
 } from "@/services/RoomService";
 import { createMatch, finishMatch, buildQuestions, saveMatchProgress } from "@/services/MatchService";
 import { saveAnswer } from "@/services/AnswerService";
-import { calculateScore, calculateXP, buildRanking, type RankingEntry } from "@/services/RankingService";
+import { calculateScore, calculateXP, buildRanking } from "@/services/RankingService";
+import type { RankingEntry } from "@/types";
 import { getGuestId } from "@/lib/guestId";
 import { getUserName } from "@/hooks/useAppMode";
 import { getSelectedCharacter } from "@/data/characters";
