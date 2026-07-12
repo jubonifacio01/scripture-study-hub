@@ -1,12 +1,12 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const SUPABASE_URL = "https://hzjxlpscyrezioodqwqs.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_9_08sPzWQOf6RKbca7DNBQ_oGR2wa7i";
 
-export const supabase: SupabaseClient = createClient(
-  supabaseUrl ?? "",
-  supabaseAnonKey ?? "",
-);
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || SUPABASE_PUBLISHABLE_KEY;
+
+export const supabase: SupabaseClient = createClient(supabaseUrl, supabaseAnonKey);
 
 export type SharedPermissionLevel = "read_only" | "allow_copy" | "allow_collaboration";
 
