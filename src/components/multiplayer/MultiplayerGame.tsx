@@ -125,7 +125,7 @@ export function MultiplayerGame({ questions, startAt, secondsPerQuestion, onFini
     setLocked(true);
     const isRight = chosen.every((w, i) => w.word === current.wordOrder![i]);
     const elapsed = Date.now() - stepStartRef.current;
-    onAnswer(step, current.itemId, chosen.map((w) => w.word).join(" "), isRight, elapsed);
+    onAnswer(step, current.itemId, chosen.map((w) => w.word).join(" "), isRight, elapsed, secondsPerQuestion);
     setTimeout(() => advance(isRight, elapsed), 700);
   };
 
