@@ -99,7 +99,7 @@ export function MultiplayerGame({ questions, startAt, secondsPerQuestion, onFini
     const elapsed = Date.now() - stepStartRef.current;
     setPicked(optId);
     const isRight = optId === current.correctOptionId;
-    onAnswer(step, current.itemId, optId, isRight, elapsed);
+    onAnswer(step, current.itemId, optId, isRight, elapsed, secondsPerQuestion);
     setTimeout(() => advance(isRight, elapsed), 600);
   };
 
