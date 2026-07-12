@@ -5,17 +5,15 @@ import { AppLayout } from "@/components/AppLayout";
 import { Header } from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { PlayerCard } from "@/components/PlayerCard";
 import { EmptyState } from "@/components/EmptyState";
 import { MultiplayerGame } from "@/components/multiplayer/MultiplayerGame";
 import { useRoom } from "@/hooks/useRoom";
-import { generateRoomCode, type SharedQuestion, type RoomConfig } from "@/lib/roomChannel";
-import { loadObjectives, getObjectiveItems, loadCustomItems } from "@/data/objectives";
-import { memoryItems as seedItems } from "@/data/memoryItems";
 import { getUserName } from "@/hooks/useAppMode";
+import { getCharacterById } from "@/data/characters";
+import { loadObjectives, getObjectiveItems, loadCustomItems } from "@/data/objectives";
 import { toast } from "sonner";
-import type { Objective, MemoryItem } from "@/types";
-import { Users, Copy, Share2, Trophy, LogOut, QrCode, Sparkles, Crown, ArrowLeft } from "lucide-react";
+import type { MultiplayerDifficulty, RoomConfig } from "@/types";
+import { Users, Copy, Share2, Trophy, LogOut, QrCode, Sparkles, Crown, ArrowLeft, Check } from "lucide-react";
 
 export const Route = createFileRoute("/rooms")({
   head: () => ({
@@ -32,39 +30,12 @@ export const Route = createFileRoute("/rooms")({
 
 type View = "lobby" | "room" | "playing" | "results";
 
-const DIFFICULTY_SECONDS: Record<RoomConfig["difficulty"], number> = {
+const DIFFICULTY_SECONDS: Record<MultiplayerDifficulty, number> = {
   facil: 18,
   medio: 12,
   dificil: 7,
+  aleatorio: 12,
 };
-
-function shuffleArr<T>(arr: T[]): T[] {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
-
-function buildQuestions(items: MemoryItem[], bank: MemoryItem[], count: number): SharedQuestion[] {
-  const chosen = shuffleArr(items).slice(0, count);
-  return chosen.map((it, idx) => {
-    const distractors = shuffleArr(bank.filter((b) => b.id !== it.id)).slice(0, 3);
-    const options = shuffleArr([it, ...distractors]).map((o, i) => ({
-      id: `${idx}-${i}`,
-      label: `${o.book} ${o.chapter}:${o.verse}`,
-      _origId: o.id,
-    }));
-    const correctOptionId = options.find((o) => o._origId === it.id)!.id;
-    return {
-      itemId: it.id,
-      text: it.text,
-      correctOptionId,
-      options: options.map(({ id, label }) => ({ id, label })),
-    };
-  });
-}
 
 function RoomsPage() {
   const navigate = useNavigate();
@@ -76,13 +47,11 @@ function RoomsPage() {
   const [joinCode, setJoinCode] = useState("");
   const [isHost, setIsHost] = useState(false);
 
-  // Load stored name
   useEffect(() => {
     const stored = getUserName();
     if (stored) setName(stored);
   }, []);
 
-  // Auto-join if ?code= is present and name is set
   useEffect(() => {
     if (search.code && name && view === "lobby") {
       setCode(search.code);
@@ -91,9 +60,10 @@ function RoomsPage() {
     }
   }, [search.code, name, view]);
 
-  const room = useRoom({ code, name, isHost, enabled: view !== "lobby" });
+  const room = useRoom({ code, isHost, enabled: view !== "lobby" });
 
-  const leave = () => {
+  const leave = async () => {
+    await room.leave();
     setView("lobby");
     setCode(null);
     setIsHost(false);
@@ -102,7 +72,7 @@ function RoomsPage() {
 
   const createRoom = () => {
     if (!name) return;
-    const c = generateRoomCode();
+    const c = "------";
     setCode(c);
     setIsHost(true);
     setView("room");
@@ -132,12 +102,18 @@ function RoomsPage() {
     setName(trimmed);
   };
 
-  // Auto-transition to "playing" when host broadcasts a start
   useEffect(() => {
     if (room.match && view === "room") setView("playing");
   }, [room.match, view]);
 
-  // Ask for name inline if missing
+  useEffect(() => {
+    if (room.status === "error" && view !== "lobby") {
+      toast.error("Erro ao conectar à sala.");
+      void leave();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [room.status]);
+
   if (!name) {
     return (
       <AppLayout>
@@ -165,25 +141,19 @@ function RoomsPage() {
   }
 
   if (view === "lobby") return <LobbyView onCreate={createRoom} joinCode={joinCode} setJoinCode={setJoinCode} onJoin={joinRoom} />;
-  if (view === "room" && code) return <RoomView code={code} isHost={isHost} room={room} onLeave={leave} onGameStart={() => setView("playing")} />;
+
+  if (view === "room" && code) {
+    return <RoomView code={code} isHost={isHost} room={room} onLeave={leave} onGameStart={() => setView("playing")} />;
+  }
+
   if (view === "playing" && code && room.match) {
-    return (
-      <PlayingView
-        room={room}
-        onFinished={() => setView("results")}
-      />
-    );
+    return <PlayingView room={room} onFinished={() => setView("results")} />;
   }
+
   if (view === "results" && code) {
-    return (
-      <ResultsView
-        room={room}
-        isHost={isHost}
-        onPlayAgain={() => setView("room")}
-        onLeave={leave}
-      />
-    );
+    return <ResultsView room={room} isHost={isHost} onPlayAgain={() => setView("room")} onLeave={leave} />;
   }
+
   return null;
 }
 
@@ -278,44 +248,42 @@ function RoomView({
   onLeave: () => void;
   onGameStart: () => void;
 }) {
-  const [objectives, setObjectives] = useState<Objective[]>([]);
-  const [customItems, setCustomItems] = useState<MemoryItem[]>([]);
+  const [objectives] = useState(() => loadObjectives());
+  const [customItems] = useState(() => loadCustomItems());
   const [showQR, setShowQR] = useState(false);
 
   const [objectiveId, setObjectiveId] = useState<string>("");
   const [questionCount, setQuestionCount] = useState(5);
-  const [difficulty, setDifficulty] = useState<RoomConfig["difficulty"]>("medio");
+  const [difficulty, setDifficulty] = useState<MultiplayerDifficulty>("medio");
+
+  const actualCode = room.room?.code ?? code;
 
   useEffect(() => {
-    const objs = loadObjectives();
-    setObjectives(objs);
-    setCustomItems(loadCustomItems());
-    if (objs[0] && !objectiveId) setObjectiveId(objs[0].id);
-  }, []);
+    if (isHost && objectives.length > 0 && !objectiveId) {
+      setObjectiveId(objectives[0].id);
+    }
+  }, [isHost, objectives, objectiveId]);
 
-  // If host, publish config on any change so guests see it
   useEffect(() => {
     if (!isHost || !objectiveId) return;
     const o = objectives.find((x) => x.id === objectiveId);
     if (!o) return;
-    void room.broadcast({
-      type: "config",
-      payload: {
-        objectiveId,
-        objectiveName: o.name,
-        questionCount,
-        difficulty,
-      },
+    void room.publishConfig({
+      objectiveId,
+      objectiveName: o.name,
+      questionCount,
+      difficulty,
     });
-  }, [isHost, objectiveId, questionCount, difficulty, objectives, room]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isHost, objectiveId, questionCount, difficulty, objectives]);
 
   const shareUrl = useMemo(() => {
     if (typeof window === "undefined") return "";
-    return `${window.location.origin}/rooms?code=${code}`;
-  }, [code]);
+    return `${window.location.origin}/rooms?code=${actualCode}`;
+  }, [actualCode]);
 
   const copyCode = () => {
-    navigator.clipboard?.writeText(code);
+    navigator.clipboard?.writeText(actualCode);
     toast("Código copiado");
   };
 
@@ -324,7 +292,7 @@ function RoomView({
       try {
         await navigator.share({
           title: "Memorize+ — Sala",
-          text: `Entre na minha sala com o código ${code}`,
+          text: `Entre na minha sala com o código ${actualCode}`,
           url: shareUrl,
         });
         return;
@@ -347,16 +315,16 @@ function RoomView({
       toast.error("Este objetivo não tem versículos");
       return;
     }
-    const bank = [...items, ...seedItems];
-    const questions = buildQuestions(items, bank, Math.min(questionCount, items.length));
-    const startAt = Date.now() + 3500; // 3s countdown for everyone
-    void room.broadcast({
-      type: "start",
-      payload: {
-        questions,
-        startAt,
-        config: { objectiveId: o.id, objectiveName: o.name, questionCount: questions.length, difficulty },
-      },
+    const allReady = room.players.length >= 2 && room.players.every((p) => p.ready);
+    if (!allReady) {
+      toast.error("É necessário 2+ jogadores e todos prontos");
+      return;
+    }
+    void room.startMatch({
+      objectiveId,
+      objectiveName: o.name,
+      questionCount,
+      difficulty,
     });
     onGameStart();
   };
@@ -367,6 +335,13 @@ function RoomView({
   const displayDifficulty = !isHost && cfg ? cfg.difficulty : difficulty;
 
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(shareUrl)}&size=220x220&margin=8`;
+
+  const myPlayer = room.players.find((p) => p.player_id === room.myPlayerId);
+  const myReady = myPlayer?.ready ?? false;
+
+  const toggleReady = () => {
+    void room.toggleReady(!myReady);
+  };
 
   return (
     <AppLayout>
@@ -385,7 +360,7 @@ function RoomView({
         <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
           Código da sala
         </p>
-        <p className="mt-2 text-4xl font-semibold tabular-nums tracking-[0.28em]">{code}</p>
+        <p className="mt-2 text-4xl font-semibold tabular-nums tracking-[0.28em]">{actualCode}</p>
         <div className="mt-4 flex justify-center gap-2">
           <Button variant="outline" size="sm" onClick={copyCode} className="h-9 gap-1.5 rounded-full">
             <Copy className="h-3.5 w-3.5" /> Copiar
@@ -413,10 +388,10 @@ function RoomView({
         </AnimatePresence>
         <p className="mt-4 text-xs text-muted-foreground">
           Status:{" "}
-          <span className={room.status === "joined" ? "text-primary" : ""}>
-            {room.status === "joined" ? "Conectado" : "Conectando…"}
+          <span className={room.status === "connected" ? "text-primary" : ""}>
+            {room.status === "connected" ? "Conectado" : "Conectando…"}
           </span>{" "}
-          • {room.participants.length} participante{room.participants.length === 1 ? "" : "s"}
+          • {room.players.length} participante{room.players.length === 1 ? "" : "s"}
         </p>
       </motion.section>
 
@@ -425,29 +400,33 @@ function RoomView({
           Participantes
         </h2>
         <div className="flex flex-col gap-2">
-          {room.participants.length === 0 ? (
+          {room.players.length === 0 ? (
             <EmptyState title="Aguardando conexão" description="Compartilhe o código para começar." />
           ) : (
-            room.participants.map((p, i) => (
-              <div key={p.id} className="card-elevated flex items-center gap-3 p-3">
-                <span className="w-6 shrink-0 text-center text-xs font-medium tabular-nums text-muted-foreground">
-                  {i + 1}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="flex items-center gap-1.5 truncate text-[14px] font-medium tracking-tight">
-                    {p.name || "Convidado"}
-                    {p.isHost && <Crown className="h-3.5 w-3.5 text-primary" strokeWidth={2} />}
-                    {p.id === room.myId && (
-                      <span className="text-[10px] font-normal text-muted-foreground">(você)</span>
-                    )}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {p.isHost ? "Anfitrião" : "Pronto"}
-                  </p>
+            room.players.map((p, i) => {
+              const char = p.character ? getCharacterById(p.character) : null;
+              return (
+                <div key={p.id} className="card-elevated flex items-center gap-3 p-3">
+                  <span className="w-6 shrink-0 text-center text-xs font-medium tabular-nums text-muted-foreground">
+                    {i + 1}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="flex items-center gap-1.5 truncate text-[14px] font-medium tracking-tight">
+                      {p.display_name || "Convidado"}
+                      {p.is_host && <Crown className="h-3.5 w-3.5 text-primary" strokeWidth={2} />}
+                      {p.player_id === room.myPlayerId && (
+                        <span className="text-[10px] font-normal text-muted-foreground">(você)</span>
+                      )}
+                    </p>
+                    <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      {char?.name ?? "Sem personagem"}
+                      {p.ready && <span className="text-success">• Pronto</span>}
+                    </p>
+                  </div>
+                  <span className={"h-2 w-2 rounded-full " + (p.connected ? "bg-success" : "bg-muted-foreground/40")} />
                 </div>
-                <span className="h-2 w-2 rounded-full bg-success" />
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </section>
@@ -485,19 +464,19 @@ function RoomView({
             />
 
             <label className="mt-4 block text-xs font-medium text-muted-foreground">Dificuldade</label>
-            <div className="mt-2 grid grid-cols-3 gap-2">
-              {(["facil", "medio", "dificil"] as const).map((d) => (
+            <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {(["facil", "medio", "dificil", "aleatorio"] as const).map((d) => (
                 <button
                   key={d}
                   onClick={() => setDifficulty(d)}
                   className={
-                    "press h-10 rounded-xl border text-sm font-medium capitalize transition-colors " +
+                    "press h-10 rounded-xl border text-sm font-medium transition-colors " +
                     (difficulty === d
                       ? "border-primary bg-primary/10 text-primary"
                       : "border-border bg-card text-muted-foreground hover:text-foreground")
                   }
                 >
-                  {d === "facil" ? "Fácil" : d === "medio" ? "Médio" : "Difícil"}
+                  {d === "facil" ? "Fácil" : d === "medio" ? "Médio" : d === "dificil" ? "Difícil" : "Aleatório"}
                 </button>
               ))}
             </div>
@@ -506,23 +485,35 @@ function RoomView({
               onClick={start}
               size="lg"
               className="mt-6 h-12 w-full rounded-xl"
-              disabled={room.participants.length < 1 || !objectiveId}
+              disabled={room.players.length < 2 || !objectiveId}
             >
               <Sparkles className="mr-2 h-4 w-4" /> Iniciar partida
             </Button>
           </>
         ) : (
-          <div className="mt-4 space-y-3 text-sm">
-            <Row label="Objetivo" value={remoteObjectiveName ?? "aguardando…"} />
-            <Row label="Perguntas" value={String(displayCount)} />
-            <Row
-              label="Dificuldade"
-              value={displayDifficulty === "facil" ? "Fácil" : displayDifficulty === "medio" ? "Médio" : "Difícil"}
-            />
-            <p className="pt-2 text-center text-xs text-muted-foreground">
-              Aguardando o anfitrião iniciar a partida…
-            </p>
-          </div>
+          <>
+            <div className="mt-4 space-y-3 text-sm">
+              <Row label="Objetivo" value={remoteObjectiveName ?? "aguardando…"} />
+              <Row label="Perguntas" value={String(displayCount)} />
+              <Row
+                label="Dificuldade"
+                value={displayDifficulty === "facil" ? "Fácil" : displayDifficulty === "medio" ? "Médio" : displayDifficulty === "dificil" ? "Difícil" : "Aleatório"}
+              />
+            </div>
+
+            <Button
+              onClick={toggleReady}
+              variant={myReady ? "outline" : "default"}
+              size="lg"
+              className="mt-6 h-12 w-full rounded-xl"
+            >
+              {myReady ? (
+                <><Check className="mr-2 h-4 w-4" /> Pronto!</>
+              ) : (
+                "Marcar como pronto"
+              )}
+            </Button>
+          </>
         )}
       </section>
 
@@ -559,21 +550,20 @@ function PlayingView({
 
   const handleFinish = async (r: { correct: number; score: number; timeMs: number }) => {
     setMyDone(true);
-    await room.updateSelf({ done: true, correct: r.correct, score: r.score, timeMs: r.timeMs });
+    await room.finishPlaying(r.correct, match.questions.length, r.timeMs);
   };
 
-  // When everyone is done, transition to results
   useEffect(() => {
     if (!myDone) return;
-    const all = room.participants.length > 0 && room.participants.every((p) => p.done);
+    const all = room.players.length > 0 && room.players.every((p) => p.done);
     if (all) onFinished();
-  }, [room.participants, myDone, onFinished]);
+  }, [room.players, myDone, onFinished]);
 
   return (
     <AppLayout>
       <div className="mt-3 flex items-center justify-between">
         <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-          Partida ao vivo • {room.participants.length} jogadores
+          Partida ao vivo • {room.players.length} jogadores
         </p>
       </div>
 
@@ -588,13 +578,13 @@ function PlayingView({
               Aguardando os outros jogadores concluírem…
             </p>
             <div className="mt-6 space-y-2 text-left">
-              {[...room.participants]
+              {[...room.players]
                 .sort((a, b) => b.score - a.score)
                 .map((p) => (
                   <div key={p.id} className="flex items-center justify-between rounded-xl border border-border bg-card px-3 py-2">
                     <span className="text-sm font-medium truncate">
-                      {p.name}
-                      {p.id === room.myId ? " (você)" : ""}
+                      {p.display_name}
+                      {p.player_id === room.myPlayerId ? " (você)" : ""}
                     </span>
                     <span className={"text-xs tabular-nums " + (p.done ? "text-success" : "text-muted-foreground")}>
                       {p.done ? `${p.score} pts` : "jogando…"}
@@ -612,6 +602,7 @@ function PlayingView({
             startAt={match.startAt}
             secondsPerQuestion={spq}
             onFinish={handleFinish}
+            onAnswer={room.submitAnswer}
           />
         )}
       </div>
@@ -632,18 +623,10 @@ function ResultsView({
   onPlayAgain: () => void;
   onLeave: () => void;
 }) {
-  const ranking = useMemo(
-    () =>
-      [...room.participants].sort((a, b) => {
-        if (b.score !== a.score) return b.score - a.score;
-        return a.timeMs - b.timeMs;
-      }),
-    [room.participants],
-  );
+  const ranking = room.ranking;
 
   const handleAgain = async () => {
-    if (isHost) await room.broadcast({ type: "reset", payload: null });
-    await room.updateSelf({ done: false, score: 0, correct: 0, timeMs: 0 });
+    if (isHost) await room.playAgain();
     onPlayAgain();
   };
 
@@ -670,7 +653,7 @@ function ResultsView({
           const isTop3 = i < 3;
           return (
             <motion.div
-              key={p.id}
+              key={p.playerId}
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.04 }}
@@ -684,13 +667,13 @@ function ResultsView({
               </div>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-[14px] font-medium tracking-tight">
-                  {p.name}
-                  {p.id === room.myId && (
+                  {p.displayName}
+                  {p.playerId === room.myPlayerId && (
                     <span className="ml-1.5 text-[10px] font-normal text-muted-foreground">(você)</span>
                   )}
                 </p>
                 <p className="text-xs text-muted-foreground tabular-nums">
-                  {p.correct} acertos • {(p.timeMs / 1000).toFixed(1)}s
+                  {p.correct} acertos • {(p.timeMs / 1000).toFixed(1)}s • combo {p.combo}x
                 </p>
               </div>
               <div className="text-right">

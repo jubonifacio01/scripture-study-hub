@@ -7,11 +7,12 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { Toaster } from "@/components/ui/sonner";
+import { ensureGuestUser } from "@/services/GuestUserService";
 
 function NotFoundComponent() {
   return (
@@ -157,6 +158,20 @@ function ThemeInitScript() {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const [guestReady, setGuestReady] = useState(false);
+
+  useEffect(() => {
+    ensureGuestUser()
+      .then(() => setGuestReady(true))
+      .catch((err) => {
+        console.error("Failed to ensure guest user:", err);
+        setGuestReady(true);
+      });
+  }, []);
+
+  if (!guestReady) {
+    return <div className="min-h-screen bg-background" />;
+  }
 
   return (
     <QueryClientProvider client={queryClient}>
