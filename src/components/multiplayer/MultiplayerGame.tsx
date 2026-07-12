@@ -16,7 +16,8 @@ interface Props {
     answer: string,
     correct: boolean,
     elapsedMs: number,
-  ) => void;
+    secondsPerQuestion: number,
+  ) => void | Promise<void>;
 }
 
 export function MultiplayerGame({ questions, startAt, secondsPerQuestion, onFinish, onAnswer }: Props) {
