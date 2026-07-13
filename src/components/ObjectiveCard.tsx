@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { ChevronRight, FileText, Clock } from "lucide-react";
 import type { Objective } from "@/types";
-import { getObjectiveProgress, loadCustomItems } from "@/data/objectives";
+import { formatLastActivity } from "@/data/objectives";
 
 interface ObjectiveCardProps {
   objective: Objective;
@@ -9,8 +9,9 @@ interface ObjectiveCardProps {
 }
 
 export function ObjectiveCard({ objective, compact = false }: ObjectiveCardProps) {
-  const customItems = loadCustomItems();
-  const progress = getObjectiveProgress(objective, customItems);
+  // Derive count directly from DB-provided itemIds. No local state.
+  const totalTexts = objective.itemIds.length;
+  const lastActivityLabel = formatLastActivity(objective.lastStudiedAt);
 
   return (
     <Link
