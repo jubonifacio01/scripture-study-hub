@@ -249,8 +249,30 @@ function RoomView({
   onLeave: () => void;
   onGameStart: () => void;
 }) {
-  const [objectives] = useState(() => loadObjectives());
-  const [customItems] = useState(() => loadCustomItems());
+  const [objectiveRows, setObjectiveRows] = useState<ObjectiveWithItems[]>([]);
+  const objectives = objectiveRows.map((r) => r.objective);
+  const getItemsFor = (id: string) => objectiveRows.find((r) => r.objective.id === id)?.items ?? [];
+
+  // Load libraries fresh from DB whenever the RoomView mounts and keep them
+  // in sync via Realtime — no stale localStorage, no ghost entries.
+  useEffect(() => {
+    let cancelled = false;
+    const reload = async () => {
+      const { data } = await fetchObjectives();
+      if (!cancelled && data) setObjectiveRows(data);
+    };
+    void reload();
+    const channel = supabase
+      .channel("rooms:objectives-sync")
+      .on("postgres_changes", { event: "*", schema: "public", table: "objectives" }, () => void reload())
+      .on("postgres_changes", { event: "*", schema: "public", table: "memory_texts" }, () => void reload())
+      .subscribe();
+    return () => {
+      cancelled = true;
+      void supabase.removeChannel(channel);
+    };
+  }, []);
+
   const [showQR, setShowQR] = useState(false);
 
   const [objectiveId, setObjectiveId] = useState<string>("");
