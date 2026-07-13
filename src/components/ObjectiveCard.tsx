@@ -34,24 +34,16 @@ export function ObjectiveCard({ objective, compact = false }: ObjectiveCardProps
         <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
           <span className="flex items-center gap-1">
             <FileText className="h-3 w-3" strokeWidth={1.75} />
-            {progress.totalTexts} {progress.totalTexts === 1 ? "texto" : "textos"}
+            {totalTexts} {totalTexts === 1 ? "texto" : "textos"}
           </span>
           {!compact && (
             <span className="flex items-center gap-1">
               <Clock className="h-3 w-3" strokeWidth={1.75} />
-              {progress.lastActivityLabel}
+              {lastActivityLabel}
             </span>
           )}
         </div>
       </div>
-      {!compact && progress.totalTexts > 0 && (
-        <div className="shrink-0 text-right">
-          <p className="text-[13px] font-semibold tabular-nums text-foreground">
-            {progress.masteryPct}%
-          </p>
-          <p className="text-[10px] text-muted-foreground">domínio</p>
-        </div>
-      )}
       <ChevronRight
         strokeWidth={1.75}
         className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5"
