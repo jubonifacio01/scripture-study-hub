@@ -181,12 +181,12 @@ export function useRoom({ code, isHost, enabled }: UseRoomArgs) {
   const startMatch = useCallback(async (cfg: RoomConfig) => {
     if (!roomRef.current) return;
 
-    const objectives = loadObjectives();
-    const customItems = loadCustomItems();
-    const obj = objectives.find((o) => o.id === cfg.objectiveId);
-    if (!obj) return;
+    // Always fetch objectives + items fresh from the DB — no localStorage.
+    const { data } = await fetchObjectives();
+    const row = (data ?? []).find((r) => r.objective.id === cfg.objectiveId);
+    if (!row) return;
 
-    const items = getObjectiveItems(obj, customItems);
+    const items = row.items;
     if (items.length === 0) return;
 
     const bank = [...items, ...seedItems];
