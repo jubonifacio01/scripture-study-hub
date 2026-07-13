@@ -10,7 +10,8 @@ import { MultiplayerGame } from "@/components/multiplayer/MultiplayerGame";
 import { useRoom } from "@/hooks/useRoom";
 import { getUserName } from "@/hooks/useAppMode";
 import { getCharacterById } from "@/data/characters";
-import { loadObjectives, getObjectiveItems, loadCustomItems } from "@/data/objectives";
+import { fetchObjectives, type ObjectiveWithItems } from "@/services/ObjectiveService";
+import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
 import type { MultiplayerDifficulty, RoomConfig } from "@/types";
 import { Users, Copy, Share2, Trophy, LogOut, QrCode, Sparkles, Crown, ArrowLeft, Check } from "lucide-react";
@@ -105,6 +106,18 @@ function RoomsPage() {
   useEffect(() => {
     if (room.match && view === "room") setView("playing");
   }, [room.match, view]);
+
+  // Every client transitions to results the moment the room status becomes
+  // "finished" in the DB — no dependency on the host clicking anything.
+  useEffect(() => {
+    if (room.room?.status === "finished" && (view === "playing" || view === "room")) {
+      setView("results");
+    }
+    if (room.room?.status === "waiting" && view === "results") {
+      setView("room");
+    }
+  }, [room.room?.status, view]);
+
 
   useEffect(() => {
     if (room.status === "error" && view !== "lobby") {
@@ -248,8 +261,30 @@ function RoomView({
   onLeave: () => void;
   onGameStart: () => void;
 }) {
-  const [objectives] = useState(() => loadObjectives());
-  const [customItems] = useState(() => loadCustomItems());
+  const [objectiveRows, setObjectiveRows] = useState<ObjectiveWithItems[]>([]);
+  const objectives = objectiveRows.map((r) => r.objective);
+  const getItemsFor = (id: string) => objectiveRows.find((r) => r.objective.id === id)?.items ?? [];
+
+  // Load libraries fresh from DB whenever the RoomView mounts and keep them
+  // in sync via Realtime — no stale localStorage, no ghost entries.
+  useEffect(() => {
+    let cancelled = false;
+    const reload = async () => {
+      const { data } = await fetchObjectives();
+      if (!cancelled && data) setObjectiveRows(data);
+    };
+    void reload();
+    const channel = supabase
+      .channel("rooms:objectives-sync")
+      .on("postgres_changes", { event: "*", schema: "public", table: "objectives" }, () => void reload())
+      .on("postgres_changes", { event: "*", schema: "public", table: "memory_texts" }, () => void reload())
+      .subscribe();
+    return () => {
+      cancelled = true;
+      void supabase.removeChannel(channel);
+    };
+  }, []);
+
   const [showQR, setShowQR] = useState(false);
 
   const [objectiveId, setObjectiveId] = useState<string>("");
@@ -310,7 +345,7 @@ function RoomView({
       toast.error("Escolha um objetivo");
       return;
     }
-    const items = getObjectiveItems(o, customItems);
+    const items = getItemsFor(o.id);
     if (items.length === 0) {
       toast.error("Este objetivo não tem versículos");
       return;

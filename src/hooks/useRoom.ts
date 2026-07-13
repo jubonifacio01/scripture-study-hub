@@ -20,7 +20,7 @@ import type { RankingEntry } from "@/types";
 import { getGuestId } from "@/lib/guestId";
 import { getUserName } from "@/hooks/useAppMode";
 import { getSelectedCharacter } from "@/data/characters";
-import { loadObjectives, getObjectiveItems, loadCustomItems } from "@/data/objectives";
+import { fetchObjectives } from "@/services/ObjectiveService";
 import { memoryItems as seedItems } from "@/data/memoryItems";
 import type { Room, RoomPlayer, SharedQuestion, RoomConfig, MultiplayerDifficulty, Match } from "@/types";
 
@@ -181,12 +181,12 @@ export function useRoom({ code, isHost, enabled }: UseRoomArgs) {
   const startMatch = useCallback(async (cfg: RoomConfig) => {
     if (!roomRef.current) return;
 
-    const objectives = loadObjectives();
-    const customItems = loadCustomItems();
-    const obj = objectives.find((o) => o.id === cfg.objectiveId);
-    if (!obj) return;
+    // Always fetch objectives + items fresh from the DB — no localStorage.
+    const { data } = await fetchObjectives();
+    const row = (data ?? []).find((r) => r.objective.id === cfg.objectiveId);
+    if (!row) return;
 
-    const items = getObjectiveItems(obj, customItems);
+    const items = row.items;
     if (items.length === 0) return;
 
     const bank = [...items, ...seedItems];
@@ -338,6 +338,20 @@ export function useRoom({ code, isHost, enabled }: UseRoomArgs) {
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code, enabled, isHost]);
+
+  // ─── Auto-finish: when every player is done, host marks room finished ─────
+  useEffect(() => {
+    if (!isHostRef.current) return;
+    if (!roomRef.current || roomRef.current.status !== "playing") return;
+    if (players.length === 0) return;
+    if (!players.every((p) => p.done)) return;
+    void (async () => {
+      if (!roomRef.current) return;
+      await updateRoomStatus(roomRef.current.id, "finished");
+      if (matchRecord) await finishMatch(matchRecord.id);
+    })();
+  }, [players, matchRecord]);
+
 
   const ranking: RankingEntry[] = buildRanking(players);
 
