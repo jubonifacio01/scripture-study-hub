@@ -339,6 +339,20 @@ export function useRoom({ code, isHost, enabled }: UseRoomArgs) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code, enabled, isHost]);
 
+  // ─── Auto-finish: when every player is done, host marks room finished ─────
+  useEffect(() => {
+    if (!isHostRef.current) return;
+    if (!roomRef.current || roomRef.current.status !== "playing") return;
+    if (players.length === 0) return;
+    if (!players.every((p) => p.done)) return;
+    void (async () => {
+      if (!roomRef.current) return;
+      await updateRoomStatus(roomRef.current.id, "finished");
+      if (matchRecord) await finishMatch(matchRecord.id);
+    })();
+  }, [players, matchRecord]);
+
+
   const ranking: RankingEntry[] = buildRanking(players);
 
   return {
