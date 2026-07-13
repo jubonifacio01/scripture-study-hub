@@ -107,6 +107,18 @@ function RoomsPage() {
     if (room.match && view === "room") setView("playing");
   }, [room.match, view]);
 
+  // Every client transitions to results the moment the room status becomes
+  // "finished" in the DB — no dependency on the host clicking anything.
+  useEffect(() => {
+    if (room.room?.status === "finished" && (view === "playing" || view === "room")) {
+      setView("results");
+    }
+    if (room.room?.status === "waiting" && view === "results") {
+      setView("room");
+    }
+  }, [room.room?.status, view]);
+
+
   useEffect(() => {
     if (room.status === "error" && view !== "lobby") {
       toast.error("Erro ao conectar à sala.");
