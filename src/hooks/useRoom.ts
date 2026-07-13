@@ -20,7 +20,7 @@ import type { RankingEntry } from "@/types";
 import { getGuestId } from "@/lib/guestId";
 import { getUserName } from "@/hooks/useAppMode";
 import { getSelectedCharacter } from "@/data/characters";
-import { loadObjectives, getObjectiveItems, loadCustomItems } from "@/data/objectives";
+import { fetchObjectives } from "@/services/ObjectiveService";
 import { memoryItems as seedItems } from "@/data/memoryItems";
 import type { Room, RoomPlayer, SharedQuestion, RoomConfig, MultiplayerDifficulty, Match } from "@/types";
 
