@@ -333,7 +333,7 @@ function RoomView({
       toast.error("Escolha um objetivo");
       return;
     }
-    const items = getObjectiveItems(o, customItems);
+    const items = getItemsFor(o.id);
     if (items.length === 0) {
       toast.error("Este objetivo não tem versículos");
       return;
