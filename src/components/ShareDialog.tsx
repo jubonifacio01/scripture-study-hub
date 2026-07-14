@@ -358,19 +358,19 @@ export function ImportDialog({
             <Label className="text-xs font-medium text-muted-foreground">
               Código de compartilhamento
             </Label>
-            <div className="mt-1.5 flex gap-2">
+            <div className="mt-1.5 flex w-full gap-2">
               <input
                 type="text"
                 value={code}
                 onChange={(e) => setCode(e.target.value.toUpperCase())}
                 placeholder="Ex.: ABC123DE"
-                className="h-12 flex-1 rounded-[14px] border border-border bg-background px-4 font-mono text-lg uppercase tracking-wider focus:border-foreground/30 focus:outline-none"
+                className="h-12 min-w-0 flex-1 rounded-[14px] border border-border bg-background px-4 font-mono text-lg uppercase tracking-wider focus:border-foreground/30 focus:outline-none"
               />
               <Button
                 variant="outline"
                 onClick={handlePreview}
                 disabled={!code.trim() || previewLoading}
-                className="h-12 rounded-[14px] px-4"
+                className="h-12 shrink-0 rounded-[14px] px-4"
               >
                 {previewLoading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
