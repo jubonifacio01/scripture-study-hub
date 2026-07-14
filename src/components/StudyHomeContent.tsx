@@ -59,7 +59,7 @@ export function StudyHomeContent({ stats, objectives, itemsMap }: StudyHomeConte
             <p className="text-xs font-medium tracking-tight text-primary">
               {lastObjective.name}
             </p>
-            <h2 className="mt-2 text-[22px] font-semibold leading-snug tracking-tight">
+            <h2 className="mt-2 text-[22px] font-semibold leading-tight whitespace-normal break-words text-foreground">
               {lastItems[0]?.title ?? "Retomar estudo"}
             </h2>
             {lastItems[0]?.text ? (
@@ -138,7 +138,7 @@ export function StudyHomeContent({ stats, objectives, itemsMap }: StudyHomeConte
           </div>
           <div>
             <p className="text-[13px] font-medium text-foreground">
-              Último estudo: {formatLastStudyDate(stats.lastStudyDate)}
+              Último estudo: {formatLastStudyDate(stats.lastStudyDate ?? null)}
             </p>
             <p className="text-[11px] text-muted-foreground">
               Continue praticando para melhorar sua memorização
