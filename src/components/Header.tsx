@@ -20,7 +20,7 @@ export function Header({ title, subtitle, right }: HeaderProps) {
           </p>
         ) : null}
         {title ? (
-          <h1 className="mt-1 truncate text-[26px] font-semibold tracking-tight text-foreground">
+          <h1 className="mt-1 text-[22px] sm:text-[26px] font-semibold leading-tight tracking-tight text-foreground break-words">
             {title}
           </h1>
         ) : null}

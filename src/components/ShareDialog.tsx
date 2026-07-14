@@ -203,37 +203,37 @@ export function ShareDialog({
               </p>
             </div>
 
-            <div>
+            <div className="min-w-0">
               <Label className="text-xs font-medium text-muted-foreground">
                 Código de compartilhamento
               </Label>
-              <div className="mt-1.5 flex items-center gap-2">
-                <div className="flex-1 rounded-[14px] border border-border bg-muted/50 px-4 py-3">
-                  <p className="font-mono text-lg font-bold tracking-wider text-foreground">
+              <div className="mt-1.5 flex w-full items-center gap-2">
+                <div className="min-w-0 flex-1 overflow-hidden rounded-[14px] border border-border bg-muted/50 px-4 py-3">
+                  <p className="truncate font-mono text-lg font-bold tracking-wider text-foreground">
                     {shareCode}
                   </p>
                 </div>
                 <Button
                   variant="outline"
                   onClick={handleCopyCode}
-                  className="h-12 rounded-[14px] px-4"
+                  className="h-12 shrink-0 rounded-[14px] px-4"
                 >
                   <Copy className="h-4 w-4" strokeWidth={2} />
                 </Button>
               </div>
             </div>
 
-            <div>
+            <div className="min-w-0">
               <Label className="text-xs font-medium text-muted-foreground">
                 Link completo
               </Label>
-              <div className="mt-1.5 flex items-center gap-2">
-                <div className="flex-1 overflow-hidden rounded-[14px] border border-border bg-muted/50 px-4 py-3">
-                  <p className="truncate text-sm text-muted-foreground">{shareUrl}</p>
+              <div className="mt-1.5 flex w-full items-center gap-2">
+                <div className="min-w-0 flex-1 overflow-hidden rounded-[14px] border border-border bg-muted/50 px-4 py-3">
+                  <p className="text-sm text-muted-foreground [overflow-wrap:anywhere] break-all">{shareUrl}</p>
                 </div>
                 <Button
                   onClick={handleCopyLink}
-                  className="h-12 rounded-[14px] px-4"
+                  className="h-12 shrink-0 rounded-[14px] px-4"
                 >
                   {copied ? (
                     <Check className="h-4 w-4" strokeWidth={2} />
@@ -358,19 +358,19 @@ export function ImportDialog({
             <Label className="text-xs font-medium text-muted-foreground">
               Código de compartilhamento
             </Label>
-            <div className="mt-1.5 flex gap-2">
+            <div className="mt-1.5 flex w-full gap-2">
               <input
                 type="text"
                 value={code}
                 onChange={(e) => setCode(e.target.value.toUpperCase())}
                 placeholder="Ex.: ABC123DE"
-                className="h-12 flex-1 rounded-[14px] border border-border bg-background px-4 font-mono text-lg uppercase tracking-wider focus:border-foreground/30 focus:outline-none"
+                className="h-12 min-w-0 flex-1 rounded-[14px] border border-border bg-background px-4 font-mono text-lg uppercase tracking-wider focus:border-foreground/30 focus:outline-none"
               />
               <Button
                 variant="outline"
                 onClick={handlePreview}
                 disabled={!code.trim() || previewLoading}
-                className="h-12 rounded-[14px] px-4"
+                className="h-12 shrink-0 rounded-[14px] px-4"
               >
                 {previewLoading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
