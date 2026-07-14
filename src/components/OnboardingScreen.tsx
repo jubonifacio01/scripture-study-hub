@@ -56,7 +56,7 @@ export function OnboardingScreen({ onSelect }: OnboardingScreenProps) {
         >
           <MemorizeMark size={22} strokeWidth={1.5} className="text-foreground" />
           <span className="text-[13px] font-semibold tracking-tight text-foreground">
-            Memorize+
+            Memorium
           </span>
         </motion.header>
 
@@ -154,15 +154,7 @@ function NameStep({
   );
 }
 
-function CharacterStep({
-  selected,
-  onSelect,
-  onConfirm,
-}: {
-  selected: string | null;
-  onSelect: (id: string) => void;
-  onConfirm: () => void;
-}) {
+function CharacterStep({ selected, onSelect, onConfirm }: { selected: string | null; onSelect: (id: string) => void; onConfirm: () => void }) {
   return (
     <>
       <motion.div
@@ -216,17 +208,7 @@ function CharacterStep({
   );
 }
 
-function CharacterOption({
-  character,
-  index,
-  selected,
-  onSelect,
-}: {
-  character: Character;
-  index: number;
-  selected: boolean;
-  onSelect: () => void;
-}) {
+function CharacterOption({ character, index, selected, onSelect }: { character: Character; index: number; selected: boolean; onSelect: () => void }) {
   return (
     <motion.button
       type="button"
@@ -235,12 +217,12 @@ function CharacterOption({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.45, delay: 0.12 + index * 0.05, ease: [0.22, 1, 0.36, 1] }}
       whileTap={{ scale: 0.97 }}
-      className={
-        "flex flex-col items-center gap-2 rounded-[18px] border p-4 text-center transition-colors " +
-        (selected
+      className={`
+        flex flex-col items-center gap-2 rounded-[18px] border p-4 text-center transition-colors 
+        ${selected
           ? "border-primary bg-primary/5"
-          : "border-border bg-card hover:border-foreground/15")
-      }
+          : "border-border bg-card hover:border-foreground/15"}
+      `}
     >
       <CharacterPortrait character={character} size={64} />
       <span className="text-[13px] font-medium text-foreground">{character.name}</span>
@@ -317,7 +299,7 @@ function ModeCard({ index, icon, title, description, onClick }: ModeCardProps) {
           {icon}
         </div>
         <div className="min-w-0 flex-1">
-          <h2 className="text-[16px] font-semibold tracking-tight text-foreground">{title}</h2>
+          <h2 className="text-[16px] font-semibold tracking-tight">{title}</h2>
           <p className="mt-1.5 text-[13px] leading-relaxed text-muted-foreground">{description}</p>
         </div>
       </div>
