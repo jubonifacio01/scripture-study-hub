@@ -15,7 +15,19 @@ import {
 } from "@/data/characters";
 import { useAppMode } from "@/hooks/useAppMode";
 import { useUserStats } from "@/hooks/useUserStats";
-import { Flame, Target, BookOpen, Check, Pencil, X, CircleCheck as CheckCircle2, Zap } from "lucide-react";
+import { useAchievementsContext } from "@/components/AchievementsProvider";
+import { CompanionCard } from "@/components/CompanionCard";
+import { AchievementsList } from "@/components/AchievementsList";
+import {
+  Flame,
+  Target,
+  BookOpen,
+  Check,
+  Pencil,
+  X,
+  CircleCheck as CheckCircle2,
+  Zap,
+} from "lucide-react";
 import type { ReactNode } from "react";
 import { toast } from "sonner";
 
@@ -32,6 +44,7 @@ export const Route = createFileRoute("/profile")({
 function ProfilePage() {
   const { userName, setUserName } = useAppMode();
   const stats = useUserStats();
+  const { achievements, unlockedCompanionIds } = useAchievementsContext();
   const [selectedChar, setSelectedChar] = useState(getSelectedCharacter());
   const [showCharacterPicker, setShowCharacterPicker] = useState(false);
   const [editingName, setEditingName] = useState(false);
@@ -125,7 +138,9 @@ function ProfilePage() {
           <section className="rounded-[20px] border border-border bg-card p-5 shadow-soft">
             <XPBar xp={stats.currentLevelXP} xpToNext={stats.xpToNext} level={stats.level} />
             <p className="mt-3 text-xs text-muted-foreground">
-              Faltam <span className="font-medium text-foreground tabular-nums">{stats.xpToNext} XP</span> para o próximo nível.
+              Faltam{" "}
+              <span className="font-medium text-foreground tabular-nums">{stats.xpToNext} XP</span>{" "}
+              para o próximo nível.
             </p>
           </section>
         )}
@@ -148,15 +163,20 @@ function ProfilePage() {
             <div className="flex items-center gap-4">
               <CharacterPortrait character={currentCharacter} size={56} />
               <div className="min-w-0 flex-1">
-                <p className="text-[15px] font-semibold tracking-tight">
-                  {currentCharacter.name}
-                </p>
+                <p className="text-[15px] font-semibold tracking-tight">{currentCharacter.name}</p>
                 <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
                   {currentCharacter.description}
                 </p>
               </div>
             </div>
           </div>
+        </section>
+
+        <section>
+          <p className="mb-3 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+            Seu companheiro
+          </p>
+          <CompanionCard character={currentCharacter} unlockedCompanionIds={unlockedCompanionIds} />
         </section>
 
         {/* Stats - only show if user has activity */}
@@ -167,31 +187,39 @@ function ProfilePage() {
             </p>
             <div className="grid grid-cols-2 gap-px overflow-hidden rounded-[20px] border border-border bg-border shadow-soft">
               {stats.streak > 0 && (
-                <StatCell icon={<Flame className="h-4 w-4" strokeWidth={1.75} />} value={`${stats.streak} dias`} label="Sequência" />
+                <StatCell
+                  icon={<Flame className="h-4 w-4" strokeWidth={1.75} />}
+                  value={`${stats.streak} dias`}
+                  label="Sequência"
+                />
               )}
               {stats.studiedTexts > 0 && (
-                <StatCell icon={<BookOpen className="h-4 w-4" strokeWidth={1.75} />} value={`${stats.studiedTexts}`} label="Estudados" />
+                <StatCell
+                  icon={<BookOpen className="h-4 w-4" strokeWidth={1.75} />}
+                  value={`${stats.studiedTexts}`}
+                  label="Estudados"
+                />
               )}
               {stats.accuracy > 0 && stats.studiedTexts > 0 && (
-                <StatCell icon={<Target className="h-4 w-4" strokeWidth={1.75} />} value={`${stats.accuracy}%`} label="Precisão" />
+                <StatCell
+                  icon={<Target className="h-4 w-4" strokeWidth={1.75} />}
+                  value={`${stats.accuracy}%`}
+                  label="Precisão"
+                />
               )}
               {stats.totalXP > 0 && (
-                <StatCell icon={<Zap className="h-4 w-4" strokeWidth={1.75} />} value={`${stats.totalXP}`} label="XP total" />
+                <StatCell
+                  icon={<Zap className="h-4 w-4" strokeWidth={1.75} />}
+                  value={`${stats.totalXP}`}
+                  label="XP total"
+                />
               )}
             </div>
           </section>
         )}
 
         <section>
-          <p className="mb-3 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-            Conquistas
-          </p>
-          <div className="rounded-[20px] border border-border bg-card p-6 text-center shadow-soft">
-            <p className="text-sm font-medium">Em breve</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Conquistas, ranking e personagens chegam nas próximas versões.
-            </p>
-          </div>
+          <AchievementsList achievements={achievements} />
         </section>
       </div>
 
@@ -215,9 +243,7 @@ function ProfilePage() {
               transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
               className="relative z-10 max-h-[80vh] w-full max-w-md overflow-y-auto rounded-t-[28px] border border-border bg-card p-6 shadow-lift sm:rounded-[28px]"
             >
-              <h2 className="text-[18px] font-semibold tracking-tight">
-                Escolha seu personagem
-              </h2>
+              <h2 className="text-[18px] font-semibold tracking-tight">Escolha seu personagem</h2>
               <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
                 Seu companheiro durante os estudos.
               </p>
@@ -238,9 +264,7 @@ function ProfilePage() {
                     >
                       <CharacterPortrait character={char} size={48} />
                       <div className="min-w-0 flex-1">
-                        <p className="text-[14px] font-semibold tracking-tight">
-                          {char.name}
-                        </p>
+                        <p className="text-[14px] font-semibold tracking-tight">{char.name}</p>
                         <p className="mt-0.5 text-[12px] leading-relaxed text-muted-foreground">
                           {char.description}
                         </p>
@@ -262,15 +286,7 @@ function ProfilePage() {
   );
 }
 
-function StatCell({
-  icon,
-  value,
-  label,
-}: {
-  icon: ReactNode;
-  value: string;
-  label: string;
-}) {
+function StatCell({ icon, value, label }: { icon: ReactNode; value: string; label: string }) {
   return (
     <div className="bg-card p-4">
       <div className="text-muted-foreground">{icon}</div>
